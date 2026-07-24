@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+dist/
+build/
+
+# Proofjury runtime state (never commit gate runs/memory)
+.proofjury/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Internal strategy docs — keep local, out of any public mirror
+proofjury-claude-code-handoff-final.md
+proofjury-full-scope.md
+.rocketride/
+
+# Claude Code local settings (machine-specific, may contain tokens)
+.claude/settings.local.json
+
+# Hackathon: sponsor keys never enter the repo (see PLAN-swarmhack.md H0)
+.env
+.env.local
