@@ -52,6 +52,7 @@ def _offline_judge(monkeypatch, tmp_path):
         "OPENROUTER_API_KEY",
         "ANTHROPIC_API_KEY",
         "OPENAI_API_KEY",
+        "PIONEER_API_KEY",
         "PROOFJURY_JUDGE_PROVIDER",
         "PROOFJURY_JUDGE_MODEL",
         "XDG_CONFIG_HOME",

@@ -28,6 +28,8 @@ SEVERITY_ORDER = [
     "pending_migration",
     "lockfile_drift",
     "unfinished_work",
+    "browser_qa_failed",
+    "browser_qa_not_run",
 ]
 
 _ENV_NAME_RE = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
@@ -84,6 +86,15 @@ def _sentence(result: CheckResult) -> str:
             f"The change adds unfinished-work markers ({_locs(result)}) — "
             "TODO/FIXME/NotImplementedError lines are about to ship."
         )
+    if cls == "browser_qa_failed":
+        detail = result.evidence[0].detail if result.evidence else "defects found"
+        return (
+            f"Browser QA found defects ({detail}) — the app is known-broken "
+            "in the browser, whatever the unit tests say."
+        )
+    if cls == "browser_qa_not_run":
+        detail = result.evidence[0].detail if result.evidence else "no run recorded"
+        return f"Browser QA has not run against this worktree ({detail})."
     return f"{result.name} failed: {result.evidence_str()}."
 
 

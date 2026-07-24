@@ -76,7 +76,7 @@ advisory_app = typer.Typer(
 app.add_typer(advisory_app, name="advisory")
 
 PASSTHROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
-RUN_KINDS = ("tests", "build", "lint", "typecheck")
+RUN_KINDS = ("tests", "build", "lint", "typecheck", "qa")
 JUDGE_PROVIDERS = ("openrouter", "anthropic", "openai", "pioneer")
 
 _SENTINEL_KEY = "proofjury_has_sentinel"
@@ -205,11 +205,12 @@ def guard(
 @app.command(context_settings=PASSTHROUGH, cls=SentinelCommand)
 def run(
     ctx: typer.Context,
-    kind: str = typer.Argument(..., help="tests | build | lint | typecheck"),
+    kind: str = typer.Argument(..., help="tests | build | lint | typecheck | qa"),
 ) -> None:
     """Run a command and stamp the session marker the gate checks.
 
     proofjury run tests -- pytest -q
+    proofjury run qa -- npx replay-qa run
     """
     if kind not in RUN_KINDS:
         _usage_error(f"unknown kind '{kind}' — expected one of: {', '.join(RUN_KINDS)}")

@@ -15,6 +15,7 @@ from . import env_vars  # noqa: F401,E402
 from . import tests  # noqa: F401,E402
 from . import build  # noqa: F401,E402
 from . import preprod  # noqa: F401,E402
+from . import browser_qa  # noqa: F401,E402
 from . import secrets  # noqa: F401,E402
 from . import config  # noqa: F401,E402
 from . import migrations  # noqa: F401,E402
@@ -29,6 +30,7 @@ CHECK_NAMES: dict = {
     tests.check_tests: "tests",
     build.check_build: "build",
     preprod.check_preprod: "preprod",
+    browser_qa.check_browser_qa: "browser_qa",
     secrets.check_secrets: "secrets",
     config.check_config: "config",
     migrations.check_migrations: "migrations",

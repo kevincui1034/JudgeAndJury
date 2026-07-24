@@ -11,7 +11,11 @@ check entry. Evidence is always verifiable against the tree at `file:line`.
 Classes are ordered by severity as used by the judge:
 `missing_env_var` > `test_failure` > `build_failure` > `hardcoded_secret`
 > `tests_not_run` > `config_mismatch` > `preprod_check_skipped`
-> `pending_migration` > `lockfile_drift` > `unfinished_work`.
+> `pending_migration` > `lockfile_drift` > `unfinished_work`
+> `browser_qa_failed` > `browser_qa_not_run`.
+
+The order is **pinned**: new classes append, existing entries never move,
+so a diagnosis's narrative ordering stays stable across versions.
 
 ---
 
@@ -236,6 +240,42 @@ anchored at the added line's post-change line number.
 { "name": "unfinished", "type": "deterministic", "passed": false,
   "failure_class": "unfinished_work",
   "evidence": "added line contains TODO: # TODO: wire this up (app.py:2)" }
+```
+
+---
+
+## 10. `browser_qa_not_run` / `browser_qa_failed`
+
+**Definition.** `browser_qa_not_run`: no agentic browser-QA pass is recorded
+against this exact worktree (never ran, ran >24h ago, or code changed
+since). `browser_qa_failed`: the recorded pass exists and found defects —
+shipping means shipping known-broken user-facing behavior.
+
+Unit tests prove the code does what the code says; a browser QA pass proves
+the *app* still works. They are separate classes because they fail
+separately: green tests plus a broken checkout flow is the exact state this
+class exists to block.
+
+**Detection.** Session marker stamped by `proofjury run qa -- <cmd>` (same
+digest mechanism as tests and builds), where `<cmd>` drives a browser-QA
+runner such as Replay. Marker absent/stale/digest-mismatched →
+`browser_qa_not_run`; recorded `exit_code != 0` → `browser_qa_failed`.
+The check is **skipped unless `.proofjury.toml [commands] qa` is
+configured** — no auto-detection, so a repo that never opted in is
+unaffected. Deterministic in the same sense as every other class: the
+decision reads recorded exit codes and a worktree digest, never model
+output.
+
+**Evidence format.** `REASON (.proofjury/session.json:1)`, enriched
+best-effort from the stamped run's log with the QA runner's defect count
+and recording permalink, e.g. `browser QA run failed with exit code 1
+(npx replay-qa run) — 2 bugs · https://app.replay.io/recording/abc123`.
+
+**Example record entry.**
+```json
+{ "name": "browser_qa", "type": "deterministic", "passed": false,
+  "failure_class": "browser_qa_not_run",
+  "evidence": "code changed since browser QA last ran (worktree digest mismatch) (.proofjury/session.json:1)" }
 ```
 
 ---
