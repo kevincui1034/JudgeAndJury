@@ -36,10 +36,15 @@ PIONEER_URL = "https://api.pioneer.ai/v1/chat/completions"
 #: model for all three. The platform's Routers page reports the savings
 #: versus calling a frontier model every time.
 #:
+#: Spelled exactly as Pioneer's own catalog reports it — `GET /v1/models`
+#: returns the router as `pioneer/auto` (lowercase), not the `Pioneer/Auto`
+#: form the launch slide used. Both appear to resolve, but the server's id
+#: is the authoritative one.
+#:
 #: Override with ``[judge].model`` / ``PROOFJURY_JUDGE_MODEL``, a specific
-#: catalog id (``GET https://api.pioneer.ai/v1/base-models``), or a tuned
-#: job id from H2.
-DEFAULT_MODEL = "Pioneer/Auto"
+#: catalog id (``GET https://api.pioneer.ai/v1/models`` for chat,
+#: ``/base-models`` for embeddings), or a tuned job id from H2.
+DEFAULT_MODEL = "pioneer/auto"
 MAX_TOKENS = 700
 
 #: Pioneer routes to models it does not own, so the bare id it echoes back

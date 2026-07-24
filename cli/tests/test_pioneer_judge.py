@@ -132,7 +132,7 @@ def test_pioneer_default_model_is_the_router():
     The judge has three surfaces with very different cost profiles (cheap
     correction classifier, mid-tier advisory reviewer, heavier diagnosis),
     so routing per-prompt beats pinning one model for all three."""
-    assert PioneerJudge(api_key="k").model == "Pioneer/Auto"
+    assert PioneerJudge(api_key="k").model == "pioneer/auto"
 
 
 def test_router_choice_is_visible_in_the_record(tmp_path):
@@ -140,7 +140,7 @@ def test_router_choice_is_visible_in_the_record(tmp_path):
     answered — that is how routing decisions become auditable."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert json.loads(request.content)["model"] == "Pioneer/Auto"
+        assert json.loads(request.content)["model"] == "pioneer/auto"
         return httpx.Response(
             200,
             json=_reply(
@@ -274,7 +274,7 @@ def test_factory_selects_pioneer_from_env(tmp_path):
     judge = get_judge(env, root=tmp_path)
     assert isinstance(judge, PioneerJudge)
     assert judge.api_key == "pk-1"
-    assert judge.model == "Pioneer/Auto"
+    assert judge.model == "pioneer/auto"
 
 
 def test_autodetect_keeps_pioneer_last(tmp_path):
@@ -401,7 +401,7 @@ def test_intent_reviewer_honors_checkpoint_model_override(tmp_path):
     classifier = get_intent_chat(env, tmp_path, repo_config)
 
     assert reviewer.__self__.model == "job_abc123"
-    assert classifier.__self__.model == "Pioneer/Auto"
+    assert classifier.__self__.model == "pioneer/auto"
 
 
 def test_advisory_model_override_serves_a_tuned_job_id(tmp_path):
