@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 from pathlib import Path
 from typing import Mapping
@@ -27,6 +28,7 @@ import httpx
 from . import __version__
 from .config import _atomic_write, resolve_sync
 from .memory.store import MemoryStore
+from .session import now_iso
 
 TIMEOUT_SECONDS = 5.0
 CONNECT_TIMEOUT_SECONDS = 3.0
@@ -249,10 +251,106 @@ def pending_count(store: MemoryStore) -> int:
     )
 
 
+def _apply_advisory_label(store: MemoryStore, event: dict, ctx: dict) -> None:
+    payload = event.get("payload") or {}
+    store.label_advisory(
+        event["record_id"],
+        int(event.get("index") or 0),
+        label=payload.get("label"),
+        delivery=payload.get("delivery"),
+        retraction=payload.get("retraction"),
+    )
+
+
+def _apply_record_label(store: MemoryStore, event: dict, ctx: dict) -> None:
+    """resolve / confirm from the web. The payload mirrors exactly what
+    ``cli.py resolve`` and ``confirm`` hand to update_resolution, which
+    already pushes any prior resolution onto ``resolution["history"]``."""
+    payload = event.get("payload") or {}
+    status = payload.get("status")
+    if status not in ("accepted", "false_positive", "confirmed", "overridden"):
+        return
+    resolution = {"status": status, "at": payload.get("at") or now_iso()}
+    if payload.get("outcome"):
+        resolution["outcome"] = payload["outcome"]
+    resolution["note"] = payload.get("note")
+    store.update_resolution(payload.get("record_id") or event["record_id"], resolution)
+
+
+def _apply_intent_finding_label(store: MemoryStore, event: dict, ctx: dict) -> None:
+    from .checkpoint import get_store as get_ckpt_store
+
+    payload = event.get("payload") or {}
+    ckpt_id = payload.get("ckpt_id") or event["record_id"]
+    index = int(payload.get("index") or event.get("index") or 0)
+    ckpt_store = get_ckpt_store(ctx["root"])
+    record = ckpt_store.get(ckpt_id)
+    if record is None:
+        return
+    findings = list(record.get("findings") or [])
+    if not (0 <= index < len(findings)):
+        return
+    findings[index] = {**findings[index], "label": payload.get("label")}
+    ckpt_store.update(ckpt_id, {"findings": findings})
+
+
+def _apply_pref_status(store: MemoryStore, event: dict, ctx: dict) -> None:
+    from .memory import prefs as prefs_module
+
+    payload = event.get("payload") or {}
+    status = payload.get("status")
+    if status not in prefs_module.STATUSES:
+        return
+    pref_id = payload.get("pref_id") or event["record_id"]
+    scope = payload.get("scope") or "repo"
+    pref_store = (
+        prefs_module.user_store(ctx["env"])
+        if scope == "user"
+        else prefs_module.repo_store(ctx["root"])
+    )
+    pref_store.set_status(pref_id, status, now=now_iso())
+
+
+def _apply_config_patch(store: MemoryStore, event: dict, ctx: dict) -> None:
+    from .configfile import apply_patch
+
+    payload = event.get("payload") or {}
+    result = apply_patch(ctx["root"], payload)
+    if not result.applied:
+        # Record the conflict so the next intent push can surface it, and
+        # let the cursor advance — an unappliable patch must never wedge
+        # the feed.
+        state = ctx["state"]
+        conflicts = list(state.get("config_conflicts") or [])
+        conflicts.append(
+            {"event_seq": event.get("seq"), "reason": result.reason,
+             "table": payload.get("table")}
+        )
+        state["config_conflicts"] = conflicts[-20:]
+
+
+#: kind -> handler. `advisory_label` keeps its original error semantics
+#: (an exception propagates, the cursor stalls, the next sync resumes)
+#: because two tests pin that resume contract. The kinds added later are
+#: individually wrapped and always advance: a permanently unappliable
+#: event must never wedge the feed for every other kind.
+_LABEL_HANDLERS = {
+    "advisory_label": (_apply_advisory_label, False),
+    "record_label": (_apply_record_label, True),
+    "intent_finding_label": (_apply_intent_finding_label, True),
+    "pref_status": (_apply_pref_status, True),
+    "config_patch": (_apply_config_patch, True),
+}
+
+
 def pull_labels_and_apply(
-    store: MemoryStore, client: SyncClient, repo_id: str
+    store: MemoryStore,
+    client: SyncClient,
+    repo_id: str,
+    root: Path | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> int:
-    """Apply web-made label events to the local store; returns the count.
+    """Apply web-made events to the local store; returns the count.
 
     The cursor advances only past successfully applied events, so a
     mid-batch failure resumes where it stopped. Applied changes re-push
@@ -260,18 +358,24 @@ def pull_labels_and_apply(
     """
     state = load_state(store.root)
     applied = 0
+    ctx = {
+        "root": Path(root) if root is not None else Path(store.root).parent,
+        "env": env if env is not None else os.environ,
+        "state": state,
+    }
     result = client.pull_labels(repo_id, int(state.get("label_cursor", 0)))
     for event in result.get("events", []):
-        if event.get("kind") != "advisory_label":
+        entry = _LABEL_HANDLERS.get(event.get("kind"))
+        if entry is None:
             continue  # unknown kinds skip but still advance the cursor
-        payload = event.get("payload") or {}
-        store.label_advisory(
-            event["record_id"],
-            int(event.get("index") or 0),
-            label=payload.get("label"),
-            delivery=payload.get("delivery"),
-            retraction=payload.get("retraction"),
-        )
+        handler, swallow = entry
+        if swallow:
+            try:
+                handler(store, event, ctx)
+            except Exception:
+                pass  # never wedge the cursor on one bad event
+        else:
+            handler(store, event, ctx)
         applied += 1
         state["label_cursor"] = event["seq"]
         save_state(store.root, state)
@@ -509,7 +613,7 @@ def sync_after_gate(root: Path, env: Mapping[str, str]) -> None:
             return
         client = SyncClient(settings["token"], settings["endpoint"])
         try:
-            pull_labels_and_apply(store, client, repo_id)
+            pull_labels_and_apply(store, client, repo_id, root=root, env=env)
         except Exception:
             pass  # pull failure must not stop the push
         drain(store, client, repo_id, limit=AUTO_DRAIN_LIMIT)

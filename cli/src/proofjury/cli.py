@@ -668,7 +668,9 @@ def sync_cmd(
     client = SyncClient(settings["token"], settings["endpoint"])
     pulled = 0
     try:
-        pulled = pull_labels_and_apply(store, client, repo_id)
+        pulled = pull_labels_and_apply(
+            store, client, repo_id, root=Path.cwd(), env=os.environ
+        )
     except Exception as exc:
         console.print(f"  (label pull failed: {exc})", style="dim")
     try:
