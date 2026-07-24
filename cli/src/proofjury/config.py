@@ -423,6 +423,47 @@ def checkpoints_enabled(
     return checkpoint_settings(repo_config)["enabled"]
 
 
+#: Defaults for the repo-level ``.proofjury.toml [semantic]`` table —
+#: recall by meaning over an embedded Actian VectorAI DB (PLAN-swarmhack
+#: H3). Defaults ON because it is doubly self-gating: it needs BOTH the
+#: Actian library installed AND an embedding-capable judge key, and
+#: without either ``semantic.get_index`` returns None and recall is
+#: byte-identical to today's. It reads the same scrubbed text the judge
+#: already sees, so it opens no new egress category.
+SEMANTIC_DEFAULTS = {
+    "enabled": True,
+    "top_k": 5,
+    "embed_model": None,  # None → semantic.DEFAULT_EMBED_MODEL
+}
+
+
+def semantic_settings(repo_config: dict | None) -> dict:
+    """The ``[semantic]`` table merged over ``SEMANTIC_DEFAULTS``.
+    Malformed values fall back to the default for that key."""
+    settings = dict(SEMANTIC_DEFAULTS)
+    table = (repo_config or {}).get("semantic")
+    if not isinstance(table, dict):
+        return settings
+    if isinstance(table.get("enabled"), bool):
+        settings["enabled"] = table["enabled"]
+    value = table.get("top_k")
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+        settings["top_k"] = value
+    model = table.get("embed_model")
+    if isinstance(model, str) and model.strip():
+        settings["embed_model"] = model.strip()
+    return settings
+
+
+def semantic_enabled(
+    repo_config: dict | None, env: Mapping[str, str] | None = None
+) -> bool:
+    """``PROOFJURY_NO_SEMANTIC`` (any non-empty value) wins over config."""
+    if _env(env).get("PROOFJURY_NO_SEMANTIC"):
+        return False
+    return semantic_settings(repo_config)["enabled"]
+
+
 #: Defaults for the repo-level ``.proofjury.toml [conventions]`` table —
 #: human-authored team policy fetched from a Senso KB (PLAN-swarmhack H5).
 #: Unlike every other context surface this defaults OFF: it is the only one

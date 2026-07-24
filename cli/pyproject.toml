@@ -38,6 +38,11 @@ Issues = "https://github.com/kevincui1034/proofjury/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Semantic recall over an embedded Actian VectorAI DB (PLAN-swarmhack H3).
+# Kept OUT of the base install so `pip install proofjury` stays at
+# typer + rich + httpx; without it, memory.semantic.get_index() returns
+# None and recall falls back to the heuristic path unchanged.
+semantic = ["actian-vectorai>=0.1"]
 
 [project.scripts]
 proofjury = "proofjury.cli:app"

@@ -161,6 +161,7 @@ def recall(
     repo_id: str,
     failures: list["CheckResult"],
     foreign: list[tuple[str, MemoryStore]] | None = None,
+    semantic_ids: list[str] | None = None,
 ) -> list[MemoryRecord]:
     """Ranked prior blocked records matching the current failures.
 
@@ -169,18 +170,38 @@ def recall(
     a block BELOW every same-repo prior — cross-repo memory is context,
     never the best explanation of a local failure while a local prior
     exists, and never a strong-match short-circuit (guarded at the gate).
+
+    ``semantic_ids`` are record ids the vector index found close in
+    MEANING (PLAN-swarmhack H3). They are strictly ADDITIVE and follow
+    the same context-not-authority rule as foreign priors:
+
+    - A semantic hit that ALSO overlaps on failure class is promoted
+      within the local ranking, so a prior worded differently from the
+      current failure can still rank first — the thing token overlap
+      alone cannot do.
+    - A semantic hit that does NOT overlap on class is appended as its
+      own block below every class-matched local prior. It can never
+      short-circuit the judge: ``strong_match`` independently requires an
+      identical failure-class set, which by construction it lacks.
+    - ``EXCLUDED_RESOLUTIONS`` still applies, so a human-judged false
+      positive never returns through the vector door.
+
+    With ``semantic_ids`` empty or None the ordering is bit-for-bit what
+    it was before this parameter existed.
     """
     classes = {r.failure_class for r in failures if r.failure_class}
     if not classes:
         return []
     current_tokens = _failure_tokens(failures)
+    semantic = set(semantic_ids or ())
     # Label-informed weighting: a prior whose overlapping classes are ALL
     # noisy (false_positive labels outnumber accepted — see
     # class_reliability) sorts below every prior with a trusted overlap.
     # Demoted, never excluded. With zero labels every class is trusted and
     # ordering is identical to the unweighted behavior.
     reliability = class_reliability(store, repo_id)
-    scored: list[tuple[int, int, str, str, MemoryRecord]] = []
+    scored: list[tuple[int, int, int, str, str, MemoryRecord]] = []
+    semantic_only: list[tuple[str, str, MemoryRecord]] = []
     for record in store.iter_records():
         if record.repo_id != repo_id or record.gate_passed:
             continue
@@ -191,15 +212,38 @@ def recall(
             continue
         overlap = classes & record.failure_classes()
         if not overlap:
+            # No class overlap: admissible only as semantic context, and
+            # only below every class-matched prior.
+            if record.id in semantic:
+                semantic_only.append((record.created_at, record.id, record))
             continue
         trusted = 0 if all(
             reliability.get(cls, {}).get("noisy") for cls in overlap
         ) else 1
+        # Ranked ABOVE the token score: matching by meaning is exactly the
+        # signal token overlap cannot provide. Zero for every record when
+        # semantic recall is off, leaving the original ordering intact.
+        semantic_hit = 1 if record.id in semantic else 0
         scored.append(
-            (trusted, score_match(current_tokens, record), record.created_at, record.id, record)
+            (
+                trusted,
+                semantic_hit,
+                score_match(current_tokens, record),
+                record.created_at,
+                record.id,
+                record,
+            )
         )
-    scored.sort(key=lambda item: (item[0], item[1], item[2], item[3]), reverse=True)
+    scored.sort(
+        key=lambda item: (item[0], item[1], item[2], item[3], item[4]), reverse=True
+    )
     local_priors = [record for *_ignore, record in scored]
+
+    # Semantic-only priors: same repo, related by meaning, no shared
+    # failure class. Context only — appended after every class-matched
+    # local prior, and structurally unable to strong-match.
+    semantic_only.sort(reverse=True)
+    local_priors += [record for *_ignore, record in semantic_only]
 
     # Foreign segment: same filters, but no repo_id check and no
     # reliability demotion (this repo's labels don't describe another

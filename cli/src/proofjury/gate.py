@@ -217,6 +217,50 @@ def _active_preference_statements(root: Path, env) -> list[str]:
         return []
 
 
+def _semantic_query(failures: list[CheckResult]) -> str:
+    """Text describing the CURRENT failures, embedded to find priors that
+    mean the same thing in different words."""
+    return "\n".join(
+        f"{r.name} {r.failure_class or ''}: {r.evidence_str()}".strip()
+        for r in failures
+    )
+
+
+def _semantic_candidates(root: Path, env, config, failures) -> list[str]:
+    """Record ids the vector index finds close in meaning (H3).
+
+    Best-effort in every direction: no Actian library, no embedding key,
+    or any error → ``[]``, and recall ranks exactly as it did before.
+    """
+    if not failures:
+        return []
+    try:
+        from .config import semantic_settings
+        from .memory.semantic import get_index
+
+        index = get_index(root, env, config)
+        if index is None:
+            return []
+        return index.candidates(
+            _semantic_query(failures), semantic_settings(config)["top_k"]
+        )
+    except Exception:
+        return []
+
+
+def _semantic_index_record(root: Path, env, config, record: MemoryRecord) -> None:
+    """Index the record just appended, so the NEXT failure can recall it
+    by meaning. Never raises: indexing is bookkeeping, not the gate."""
+    try:
+        from .memory.semantic import get_index
+
+        index = get_index(root, env, config)
+        if index is not None:
+            index.index_record(record)
+    except Exception:
+        pass
+
+
 def _team_conventions(root: Path, env, task_ref, changed_files) -> list[str]:
     """Human-AUTHORED team conventions for the advisory prompt
     (PLAN-swarmhack H5). Off by default and firewalled: any error → no
@@ -449,7 +493,13 @@ def run_gate(
         except Exception:
             foreign = []
     priors = (
-        recall(store, run_context.repo_id, failures, foreign=foreign)
+        recall(
+            store,
+            run_context.repo_id,
+            failures,
+            foreign=foreign,
+            semantic_ids=_semantic_candidates(root, env, config, failures),
+        )
         if failures
         else []
     )
@@ -690,6 +740,7 @@ def run_gate(
     )
     store.append(record)
     store.append_markdown(record)
+    _semantic_index_record(root, env, config, record)
     for prior in resolved_priors:
         store.update_resolution(
             prior.id,
