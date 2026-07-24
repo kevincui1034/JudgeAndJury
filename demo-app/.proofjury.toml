@@ -7,3 +7,8 @@
 # so the worktree digest uses the file walk, which prunes __pycache__.)
 build = "python3 -m compileall -q ."
 lint = "python3 -m compileall -q app.py"
+# Agentic browser QA (Replay). Configuring this key is the ONLY thing that
+# activates the browser_qa check — unconfigured, it is skipped entirely.
+# qa.sh is a stand-in (this fixture has no web surface); pointing this at a
+# real Replay run requires no code change.
+qa = "./qa.sh"

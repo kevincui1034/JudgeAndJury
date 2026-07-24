@@ -160,9 +160,10 @@ export function NavRail({
 
   return (
     <>
-      {/* Desktop rail — hidden, never unmounted, below lg. */}
-      <nav className="glass glass-edge hidden h-full w-[236px] shrink-0 flex-col rounded-2xl py-3 lg:flex">
-        {header && <div className="px-3 pb-4">{header}</div>}
+      {/* Desktop rail — a bordered column, not a floating card. Hidden below
+          lg with CSS; never unmounted, so the LiveDot poll keeps running. */}
+      <nav className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[240px] shrink-0 flex-col border-r border-line py-4 lg:flex">
+        {header && <div className="px-3 pb-5">{header}</div>}
         <NavLinks groups={groups} />
         {footer && <div className="mt-2 px-3">{footer}</div>}
       </nav>
@@ -170,7 +171,9 @@ export function NavRail({
       {/* Mobile trigger */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger
-          className="glass glass-edge fixed bottom-4 left-4 z-40 grid size-11 place-items-center rounded-full text-ink shadow-lg lg:hidden"
+          /* Bottom-RIGHT, not bottom-left: thumb-reachable, and it keeps clear
+             of the dev-overlay badge that occupies the bottom-left corner. */
+          className="fixed bottom-5 right-5 z-40 grid size-12 place-items-center rounded-full border border-line bg-surface-2 text-ink shadow-[var(--overlay-shadow)] lg:hidden"
           aria-label="Open navigation"
         >
           <Menu className="size-5" />

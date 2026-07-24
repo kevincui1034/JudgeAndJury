@@ -1,21 +1,24 @@
 import Link from "next/link";
 
+import { SponsorMark, SponsorTag } from "@/components/sponsors/SponsorMark";
 import {
   Badge,
   ClassChip,
   EmptyState,
-  GlassPanel,
   Mono,
   PageHeader,
   PanelHeader,
   pct,
   RankedRow,
-  StatTile,
+  SplitPanel,
+  Stat,
+  StatStrip,
   timeAgo,
 } from "@/components/ui/primitives";
 import { classReliability, recentTraces } from "@/lib/queries/highlights";
 import { recallStats } from "@/lib/queries/judge";
 import { requireRepo } from "@/lib/repo";
+import { SPONSORS } from "@/lib/sponsors";
 
 export default async function MemoryPage({
   params,
@@ -30,6 +33,7 @@ export default async function MemoryPage({
     recentTraces(repo.id, 40),
   ]);
 
+  const actian = SPONSORS.actian;
   const recalled = recent.filter((r) => r.recalledFrom);
   const maxRel = reliability[0]?.total ?? 1;
   const labelled = reliability.reduce(
@@ -51,29 +55,29 @@ export default async function MemoryPage({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Blocks" value={String(recall.blocked)} tone="red" />
-        <StatTile
+      <StatStrip cols={4}>
+        <Stat label="Blocks" value={String(recall.blocked)} tone="red" />
+        <Stat
           label="Recall hit rate"
           value={pct(recall.blocked ? recall.recalled / recall.blocked : null)}
           tone="amber"
           sub="blocks matched to a prior"
         />
-        <StatTile
+        <Stat
           label="Cross-repo hits"
           value={String(recall.crossRepo)}
           tone="green"
           sub="a mistake learned in another repo"
         />
-        <StatTile
+        <Stat
           label="Labeled blocks"
           value={String(labelled)}
           sub="accepted or false positive"
         />
-      </div>
+      </StatStrip>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        <GlassPanel>
+      <SplitPanel>
+        <div>
           <PanelHeader
             title="Class"
             accent="reliability"
@@ -103,13 +107,19 @@ export default async function MemoryPage({
               ))}
             </div>
           )}
-        </GlassPanel>
+        </div>
 
-        <GlassPanel>
+        <div>
           <PanelHeader
             title="Recalled"
             accent="priors"
-            hint="A cited prior is context for the judge — it can never decide a verdict on its own."
+            hint={`Semantic recall matches a prior by meaning rather than by exact wording. Priors the judge may cite — ${actian.authority.toLowerCase()}, never authority.`}
+            right={
+              <>
+                <SponsorMark sponsor={actian} />
+                <SponsorTag sponsor={actian} />
+              </>
+            }
           />
           {recalled.length === 0 ? (
             <EmptyState
@@ -142,8 +152,8 @@ export default async function MemoryPage({
               ))}
             </div>
           )}
-        </GlassPanel>
-      </div>
+        </div>
+      </SplitPanel>
     </div>
   );
 }

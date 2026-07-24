@@ -1,22 +1,35 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Check, Lock, Terminal, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Gavel,
+  Lock,
+  MessageSquareReply,
+  Sparkles,
+  TrendingDown,
+} from "lucide-react";
 
 import { DashboardPreview } from "@/components/marketing/DashboardPreview";
 import { TerminalCard } from "@/components/marketing/TerminalCard";
 import {
   FAILURE_CLASSES,
-  HOW_IT_WORKS,
-  SPONSORS,
+  HOW_IT_LEARNS,
+  SIGNAL_SOURCES,
 } from "@/components/marketing/fixtures";
 import { MountIn } from "@/components/motion/MountIn";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
+import {
+  AuthorityBadge,
+  SponsorMark,
+} from "@/components/sponsors/SponsorMark";
 import { Badge, ClassChip, Mono } from "@/components/ui/primitives";
+import { SPONSOR_LIST } from "@/lib/sponsors";
 
 export const metadata: Metadata = {
-  title: "Proofjury — the last command before production",
+  title: "Proofjury — the judge that learns your codebase",
   description:
-    "The correctness gate for AI-written code. Deterministic checks decide, the judge explains with evidence, and every block becomes a prior the gate recalls.",
+    "A self-improving judge for AI-written code. It reviews what your agent ships, explains every finding with evidence, and retrains on the labels you give it.",
 };
 
 function Section({
@@ -43,6 +56,8 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+const SIGNAL_ICONS = [MessageSquareReply, Sparkles, TrendingDown];
+
 export default function LandingPage() {
   return (
     <>
@@ -55,25 +70,26 @@ export default function LandingPage() {
         <div className="mx-auto max-w-3xl text-center">
           <MountIn>
             <span className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-surface-2 px-3 py-1 text-[12px] text-body">
-              <Terminal className="size-3.5 text-amber-ink" />
+              <Gavel className="size-3.5 text-amber-ink" />
               Agent-neutral · Claude Code, Codex, Cursor
             </span>
           </MountIn>
 
           <MountIn delay={0.06}>
             <h1 className="mt-6 font-serif text-[44px] leading-[1.05] tracking-[-0.01em] text-ink sm:text-[64px]">
-              The last command
+              The judge that learns
               <br />
-              before production.
+              your codebase.
             </h1>
           </MountIn>
 
           <MountIn delay={0.12}>
             <p className="mx-auto mt-6 max-w-xl text-[15px] leading-relaxed text-body">
-              Your agent writes code no one reviews, then ships it. Proofjury
-              intercepts the deploy command itself — deterministic checks decide,
-              the judge explains with evidence, and every block becomes a prior
-              the gate recalls next time.
+              Proofjury reviews everything your coding agent ships and explains
+              each finding with the evidence behind it. Then you tell it what it
+              got wrong — and it retrains on that. The advice you reject stops
+              coming back, and the mistakes you keep correcting turn into rules
+              the agent gets before it writes a line.
             </p>
           </MountIn>
 
@@ -87,16 +103,23 @@ export default function LandingPage() {
                 <ArrowRight className="size-4" />
               </Link>
               <a
-                href="#how"
+                href="#learns"
                 className="inline-flex items-center gap-2 rounded-xl border border-line-2 px-5 py-2.5 text-[14px] text-body transition-colors hover:border-amber/50 hover:text-ink"
               >
-                See how it decides
+                See how it learns
               </a>
             </div>
           </MountIn>
 
           <MountIn delay={0.24}>
             <TerminalCard className="mx-auto mt-12 max-w-2xl" />
+          </MountIn>
+
+          <MountIn delay={0.3}>
+            <p className="mx-auto mt-4 max-w-xl text-[12px] leading-relaxed text-faint">
+              One finding, one recalled prior, one preference it already learned
+              — from three corrections you never had to repeat a fourth time.
+            </p>
           </MountIn>
         </div>
       </Section>
@@ -113,33 +136,35 @@ export default function LandingPage() {
           </div>
         </Reveal>
         <p className="mt-5 text-center text-[12px] text-faint">
-          Every gate run as a trace — the verdict, the evidence, and what the
-          judge told your agent.
+          Every judgment as a trace — what it found, what it cited, and whether
+          you agreed.
         </p>
       </Section>
 
-      {/* ───────────────────── how it works ───────────────────── */}
-      <Section id="how" className="border-t border-line py-20">
+      {/* ───────────────────── how it learns ───────────────────── */}
+      <Section id="learns" className="border-t border-line py-20">
         <Reveal>
-          <Eyebrow>How it works</Eyebrow>
+          <Eyebrow>How it learns</Eyebrow>
           <h2 className="mt-3 max-w-2xl text-[30px] leading-tight font-semibold tracking-[-0.02em] text-ink sm:text-[38px]">
-            The gate cannot be talked past.
+            A reviewer that gets sharper, not noisier.
           </h2>
           <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-body">
-            An agent can argue with a linter. It cannot argue with a command
-            that never ran.
+            Most review tools are static: they make the same wrong call in month
+            six that they made on day one, and you learn to ignore them. This one
+            has an opinion you can correct — and correcting it is the whole
+            interface.
           </p>
         </Reveal>
 
-        <Stagger className="mt-10 grid gap-4 md:grid-cols-3">
-          {HOW_IT_WORKS.map((s, i) => (
+        <Stagger className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {HOW_IT_LEARNS.map((s, i) => (
             <StaggerItem key={s.step} index={i}>
               <div className="glass glass-edge h-full rounded-2xl p-5">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[12px] text-amber-ink">
                     {s.step}
                   </span>
-                  <Badge tone={s.lane.includes("DECIDES") ? "red" : "faint"} mono>
+                  <Badge tone="faint" mono>
                     {s.lane}
                   </Badge>
                 </div>
@@ -155,16 +180,103 @@ export default function LandingPage() {
         </Stagger>
       </Section>
 
-      {/* ─────────────────── what it catches ─────────────────── */}
+      {/* ─────────────── what it learns from ─────────────── */}
+      <Section id="signal" className="border-t border-line py-20">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+          <Reveal>
+            <Eyebrow>What it learns from</Eyebrow>
+            <h2 className="mt-3 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-ink sm:text-[38px]">
+              You are already labelling. It just wasn&apos;t being kept.
+            </h2>
+            <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-body">
+              Every time you push back on your agent, you produce a labelled
+              example of what &ldquo;wrong&rdquo; means in your codebase. That
+              signal is normally thrown away. Here it is the training set — no
+              annotation queue, no separate labelling job, nothing extra to run.
+            </p>
+
+            <div className="mt-8 space-y-4">
+              {SIGNAL_SOURCES.map((s, i) => {
+                const Icon = SIGNAL_ICONS[i];
+                return (
+                  <div key={s.title} className="flex gap-3.5">
+                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-tint text-amber-ink">
+                      <Icon className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-[14px] font-medium text-ink">
+                          {s.title}
+                        </h3>
+                        <Badge tone="faint" mono>
+                          {s.metric}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-[13px] leading-relaxed text-body">
+                        {s.body}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Reveal>
+
+          <Reveal delay={1}>
+            <div className="glass glass-edge rounded-2xl p-5">
+              <p className="text-[11px] tracking-[0.08em] text-faint uppercase">
+                What changes as it learns
+              </p>
+              <div className="mt-4 space-y-3.5">
+                {[
+                  [
+                    "Noisy classes fade",
+                    "A class you keep marking a false positive is demoted in recall, so it stops leading the evidence.",
+                  ],
+                  [
+                    "Corrections become rules",
+                    "Three corrections in one category graduate into a candidate preference — and an active one is injected before the agent writes code.",
+                  ],
+                  [
+                    "Recall stops needing exact words",
+                    "A recurrence phrased completely differently still matches the prior that explains it.",
+                  ],
+                  [
+                    "The model itself is retrained",
+                    "Labelled findings pair with the prompts that produced them into a fine-tune corpus. Adopting the tuned judge is one line of config.",
+                  ],
+                ].map(([title, body]) => (
+                  <div
+                    key={title}
+                    className="border-t border-line pt-3.5 first:border-t-0 first:pt-0"
+                  >
+                    <p className="text-[13.5px] font-medium text-ink">{title}</p>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-faint">
+                      {body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-5 rounded-lg bg-tint px-3 py-2 font-mono text-[11.5px] text-body">
+                proofjury memory finetune
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </Section>
+
+      {/* ─────────────────── the vocabulary ─────────────────── */}
       <Section id="catches" className="border-t border-line py-20">
         <Reveal>
-          <Eyebrow>What it catches</Eyebrow>
+          <Eyebrow>The vocabulary it judges in</Eyebrow>
           <h2 className="mt-3 max-w-2xl text-[30px] leading-tight font-semibold tracking-[-0.02em] text-ink sm:text-[38px]">
             Named failures, not vibes.
           </h2>
           <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-body">
-            Each block carries a class from an open taxonomy, so a recurrence is
-            recognisable months later. Examples:
+            A judgment is only trainable if it is specific. Every finding is
+            tagged with a class from an open taxonomy — which is what makes a
+            recurrence recognisable months later, and what makes your label mean
+            something the next time. Examples:
           </p>
         </Reveal>
 
@@ -172,10 +284,6 @@ export default function LandingPage() {
           {FAILURE_CLASSES.map((c, i) => (
             <StaggerItem key={c.name} index={i}>
               <div className="glass-flat flex h-full items-start gap-3 rounded-xl px-4 py-3">
-                <X
-                  className="mt-0.5 size-3.5 shrink-0 text-verdict-red"
-                  strokeWidth={2.5}
-                />
                 <div className="min-w-0">
                   <ClassChip name={c.name} />
                   <p className="mt-1.5 text-[12px] leading-snug text-faint">
@@ -188,18 +296,20 @@ export default function LandingPage() {
         </Stagger>
       </Section>
 
-      {/* ────────────────────── the proof ────────────────────── */}
+      {/* ──────────────── evidence + integrations ──────────────── */}
       <Section id="proof" className="border-t border-line py-20">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
           <Reveal>
-            <Eyebrow>The proof record</Eyebrow>
+            <Eyebrow>Why you can trust the label</Eyebrow>
             <h2 className="mt-3 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-ink sm:text-[38px]">
               Proof, not promises.
             </h2>
             <p className="mt-4 text-[14px] leading-relaxed text-body">
-              Every run writes a reproducible record: the checks and their exit
-              codes, the diff, the blast radius, and the diagnosis. The judge
-              writes prose over that evidence — it never produces the verdict.
+              A judge you are meant to correct has to show its work, or your
+              label is a coin flip. Every run writes a reproducible record, and
+              the judge writes prose over that evidence rather than in place of
+              it. Where a run is blocked, deterministic checks made that call —
+              never the model.
             </p>
             <ul className="mt-6 space-y-3">
               {[
@@ -221,34 +331,40 @@ export default function LandingPage() {
             </ul>
             <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-faint">
               <Lock className="mt-0.5 size-3.5 shrink-0" />
-              BYOK, scrubbed at the edge, and nothing uploads until you run{" "}
-              <Mono className="text-body">proofjury connect</Mono>.
+              Bring your own key, scrubbed at the edge, and nothing uploads until
+              you run <Mono className="text-body">proofjury connect</Mono>.
             </p>
           </Reveal>
 
           <Reveal delay={1}>
-            <div className="glass glass-edge rounded-2xl p-5">
-              <p className="text-[12px] tracking-[0.08em] text-faint uppercase">
-                Sponsor surfaces
-              </p>
-              <div className="mt-4 space-y-3">
-                {SPONSORS.map((s) => (
+            <div className="glass glass-edge overflow-hidden rounded-2xl">
+              <div className="border-b border-line px-5 py-4">
+                <p className="text-[13.5px] font-medium text-ink">Integrations</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-faint">
+                  Exactly one of these can fail a run, and it does so from a
+                  recorded exit code — never from model output. The rest are
+                  evidence, context, or transport.
+                </p>
+              </div>
+              <div>
+                {SPONSOR_LIST.map((s) => (
                   <div
-                    key={s.name}
-                    className="border-t border-line pt-3 first:border-t-0 first:pt-0"
+                    key={s.id}
+                    className="flex items-start gap-3 border-t border-line px-5 py-3.5 first:border-t-0"
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium text-ink">
-                        {s.name}
-                      </span>
-                      <span className="text-[12px] text-faint">{s.role}</span>
-                      <Badge tone={s.decides ? "red" : "faint"}>
-                        {s.decides ? "can fail the gate" : "context only"}
-                      </Badge>
+                    <SponsorMark sponsor={s} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13.5px] font-medium text-ink">
+                          {s.name}
+                        </span>
+                        <span className="text-[12px] text-faint">{s.role}</span>
+                        <AuthorityBadge sponsor={s} />
+                      </div>
+                      <p className="mt-1 text-[12px] leading-relaxed text-faint">
+                        {s.note}
+                      </p>
                     </div>
-                    <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
-                      {s.note}
-                    </p>
                   </div>
                 ))}
               </div>
@@ -266,11 +382,11 @@ export default function LandingPage() {
               className="pointer-events-none absolute inset-x-0 -top-24 h-48 bg-amber/10 blur-3xl"
             />
             <h2 className="relative text-[30px] leading-tight font-semibold tracking-[-0.02em] text-ink sm:text-[40px]">
-              Make no mistakes — but for real this time.
+              Stop repeating yourself to your agent.
             </h2>
             <p className="relative mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-body">
-              One command in front of your deploy. It blocks, it explains, and
-              it remembers.
+              Correct it once. The judge keeps the correction, and the next
+              agent on the repo inherits it.
             </p>
             <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -281,7 +397,7 @@ export default function LandingPage() {
                 <ArrowRight className="size-4" />
               </Link>
               <code className="glass-flat rounded-xl px-4 py-2.5 font-mono text-[13px] text-body">
-                proofjury guard deploy -- ./deploy.sh
+                proofjury connect
               </code>
             </div>
           </div>

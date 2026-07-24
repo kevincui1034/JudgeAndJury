@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { Clock, Lock, TriangleAlert } from "lucide-react";
 
 import { ConfigEditor } from "@/components/ConfigEditor";
 import {
@@ -7,6 +8,7 @@ import {
   Mono,
   PageHeader,
   PanelHeader,
+  SplitPanel,
   timeAgo,
 } from "@/components/ui/primitives";
 import { db } from "@/db";
@@ -83,6 +85,7 @@ export default async function ConfigPage({
           <PanelHeader
             title="Conflicts"
             accent={`(${conflicts.length})`}
+            icon={TriangleAlert}
             hint="Your local file changed after the dashboard read it, so the CLI refused these rather than clobbering the edit. Re-queue them."
           />
           <div className="px-5 pb-4 text-[12px] text-body">
@@ -95,60 +98,72 @@ export default async function ConfigPage({
         </GlassPanel>
       )}
 
-      {queued.length > 0 && (
-        <GlassPanel>
+      <SplitPanel>
+        <div>
           <PanelHeader
             title="Queued"
             accent="changes"
+            icon={Clock}
             hint="Waiting for the next `proofjury sync` on the machine running this repo."
           />
-          <div className="pb-2">
-            {queued.map((q) => {
-              const p = q.payload as Record<string, unknown>;
-              return (
-                <div
-                  key={q.id}
-                  className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 first:border-t-0"
-                >
-                  <Badge tone="teal" mono>
-                    [{String(p.table)}]
-                  </Badge>
-                  <Mono className="min-w-0 flex-1 truncate text-faint">
-                    {JSON.stringify(p.set)}
-                  </Mono>
-                  <span className="text-[11px] text-faint">
-                    {timeAgo(q.createdAt)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </GlassPanel>
-      )}
+          {queued.length === 0 ? (
+            <p className="px-5 pb-5 text-[12px] text-faint">
+              Nothing queued. Changes you make below land here until the CLI
+              picks them up.
+            </p>
+          ) : (
+            <div className="pb-3">
+              {queued.map((q) => {
+                const p = q.payload as Record<string, unknown>;
+                return (
+                  <div
+                    key={q.id}
+                    className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 first:border-t-0"
+                  >
+                    <Badge tone="teal" mono>
+                      [{String(p.table)}]
+                    </Badge>
+                    <Mono className="min-w-0 flex-1 truncate text-faint">
+                      {JSON.stringify(p.set)}
+                    </Mono>
+                    <span className="shrink-0 text-[11px] text-faint">
+                      {timeAgo(q.createdAt)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-      {CONFIG_TABLES.map((spec) => (
-        <GlassPanel key={spec.table}>
+        <div>
+          <PanelHeader
+            title="Local"
+            accent="only"
+            icon={Lock}
+            hint="These decide whether and how the gate runs, so they are never remotely editable — a stolen dashboard session must not be able to weaken the gate."
+          />
+          <div className="flex flex-wrap gap-1.5 px-5 pb-5">
+            {[...LOCAL_ONLY_TABLES].sort().map((t) => (
+              <Badge key={t} tone="faint" mono>
+                [{t}]
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </SplitPanel>
+
+      {/* One surface, hairline-divided per table — seven floating cards read as
+          seven unrelated settings screens when they are one config file. */}
+      <GlassPanel className="divide-y divide-line overflow-hidden">
+        {CONFIG_TABLES.map((spec) => (
           <ConfigEditor
+            key={spec.table}
             spec={spec}
             current={effective[spec.table] ?? {}}
             repoId={repoId}
           />
-        </GlassPanel>
-      ))}
-
-      <GlassPanel>
-        <PanelHeader
-          title="Local"
-          accent="only"
-          hint="These decide whether and how the gate runs, so they are never remotely editable — a stolen dashboard session must not be able to weaken the gate."
-        />
-        <div className="flex flex-wrap gap-1.5 px-5 pb-5">
-          {[...LOCAL_ONLY_TABLES].sort().map((t) => (
-            <Badge key={t} tone="faint" mono>
-              [{t}]
-            </Badge>
-          ))}
-        </div>
+        ))}
       </GlassPanel>
     </div>
   );

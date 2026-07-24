@@ -21,7 +21,9 @@ import {
   PanelHeader,
   RankedRow,
   Sparkline,
-  StatTile,
+  Stat,
+  StatStrip,
+  SplitPanel,
   VerdictBadge,
   ms,
   pct,
@@ -143,9 +145,9 @@ export default async function OverviewPage({
     <div className="space-y-4 pb-2">
       <PageTitle repoSlug={repo.repoSlug} />
 
-      {/* ── row 1: stat tiles with inline sparklines ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatTile
+      {/* ── one surface, five readings of the same run history ── */}
+      <StatStrip cols={5}>
+        <Stat
           label="Gate runs"
           value={String(stats.total)}
           sub={`${stats.passed} passed · ${stats.blocked} blocked`}
@@ -153,7 +155,7 @@ export default async function OverviewPage({
           href={`${base}/traces`}
           icon={Activity}
         />
-        <StatTile
+        <Stat
           label="Blocked"
           value={pct(blockRate)}
           sub="deploys stopped before prod"
@@ -162,7 +164,7 @@ export default async function OverviewPage({
           href={`${base}/traces?verdict=blocked`}
           icon={ShieldX}
         />
-        <StatTile
+        <Stat
           label="Recall hit rate"
           value={pct(stats.recallHitRate)}
           sub="blocks matched to a prior"
@@ -170,20 +172,20 @@ export default async function OverviewPage({
           href={`${base}/memory`}
           icon={RotateCcw}
         />
-        <StatTile
+        <Stat
           label="Auto-resolved"
           value={pct(stats.autoResolveRate)}
           sub="blocks later closed by a pass"
           tone="green"
           icon={CircleCheck}
         />
-        <StatTile
+        <Stat
           label="p95 gate time"
           value={ms(stats.p95DurationMs)}
           sub="checks + recall + judge"
           icon={Timer}
         />
-      </div>
+      </StatStrip>
 
       {/* ── row 2: timeseries with floating glass overlays ── */}
       <GlassPanel className="relative overflow-hidden">
@@ -251,13 +253,13 @@ export default async function OverviewPage({
         </div>
       </GlassPanel>
 
-      {/* ── row 3: ranked tables ── */}
-      <div className="grid gap-3 xl:grid-cols-2">
-        <GlassPanel>
+      {/* ── two readings of the same taxonomy, one surface, one hairline ── */}
+      <SplitPanel>
+        <div>
           <PanelHeader
             title="Failure"
             accent="classes"
-          icon={TriangleAlert}
+            icon={TriangleAlert}
             hint="What actually blocks deploys in this repo."
             right={
               <Link
@@ -284,13 +286,13 @@ export default async function OverviewPage({
               ))}
             </div>
           )}
-        </GlassPanel>
+        </div>
 
-        <GlassPanel>
+        <div>
           <PanelHeader
             title="Class"
             accent="reliability"
-          icon={RotateCcw}
+            icon={RotateCcw}
             hint="Was the block right? Labels you apply train recall ranking."
             right={
               <Link
@@ -329,10 +331,10 @@ export default async function OverviewPage({
               ))}
             </div>
           )}
-        </GlassPanel>
-      </div>
+        </div>
+      </SplitPanel>
 
-      {/* ── row 4: recent traces ── */}
+      {/* ── recent traces ── */}
       <GlassPanel>
         <PanelHeader
           title="Recent"

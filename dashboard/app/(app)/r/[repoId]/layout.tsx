@@ -67,7 +67,9 @@ export default async function RepoLayout({
           </div>
         }
       />
-      <main className="min-w-0 flex-1">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-[1400px]">{children}</div>
+      </main>
     </>
   );
 }

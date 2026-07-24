@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import {
+  AuthorityBadge,
+  SponsorMark,
+  SponsorTag,
+} from "@/components/sponsors/SponsorMark";
 import { TraceView } from "@/components/trace/TraceView";
 import { buildTraceGraph } from "@/components/trace/traceLayout";
 import {
@@ -16,6 +21,7 @@ import {
 import { parseConventions, replayLinks } from "@/lib/conventions";
 import { getTrace } from "@/lib/queries/traces";
 import { requireRepo } from "@/lib/repo";
+import { SPONSORS } from "@/lib/sponsors";
 
 interface RawCheck {
   name: string;
@@ -74,6 +80,8 @@ export default async function TracePage({
 
   const recordings = checks.flatMap((c) => replayLinks(c.evidence));
   const base = `/r/${repoId}`;
+  const replay = SPONSORS.replay;
+  const actian = SPONSORS.actian;
 
   return (
     <div className="space-y-4 pb-2">
@@ -109,6 +117,21 @@ export default async function TracePage({
             >
               {record.resolutionStatus}
             </Badge>
+          )}
+          {record.recalledFrom && (
+            <span
+              className="inline-flex items-center gap-1.5"
+              title={actian.note}
+            >
+              <span className="text-[11px] text-faint">↩ recalled from</span>
+              <Badge
+                tone={record.recalledFrom.includes(":") ? "teal" : "violet"}
+                mono
+              >
+                {record.recalledFrom}
+              </Badge>
+              <SponsorTag sponsor={actian} />
+            </span>
           )}
         </div>
       </div>
@@ -172,7 +195,14 @@ export default async function TracePage({
           <PanelHeader
             title="Browser QA"
             accent="recordings"
-            hint="Captured by the browser-QA run this gate checked."
+            hint={`Captured by the browser-QA run this gate checked. The ${replay.capabilityKey} result comes from a recorded exit code and a worktree digest, never from model output.`}
+            right={
+              <>
+                <SponsorMark sponsor={replay} />
+                <SponsorTag sponsor={replay} />
+                <AuthorityBadge sponsor={replay} />
+              </>
+            }
           />
           <div className="flex flex-wrap gap-2 px-5 pb-5">
             {recordings.map((url) => (

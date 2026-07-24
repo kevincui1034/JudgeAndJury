@@ -17,7 +17,7 @@ export default async function ReposPage() {
   const repos = await listRepos(user.id!);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-5 pt-8 pb-16">
       <PageHeader
         title="Connected"
         accent="repos"

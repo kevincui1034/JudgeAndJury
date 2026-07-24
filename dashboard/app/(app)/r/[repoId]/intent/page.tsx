@@ -1,3 +1,5 @@
+import { History, Tags } from "lucide-react";
+
 import {
   Badge,
   EmptyState,
@@ -7,7 +9,8 @@ import {
   PanelHeader,
   pct,
   RankedRow,
-  StatTile,
+  Stat,
+  StatStrip,
   timeAgo,
 } from "@/components/ui/primitives";
 import {
@@ -55,31 +58,32 @@ export default async function IntentPage({
         </GlassPanel>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatTile label="Checkpoints" value={String(stats.total)} />
-            <StatTile
+          <StatStrip cols={4}>
+            <Stat label="Checkpoints" value={String(stats.total)} />
+            <Stat
               label="Correction rate"
               value={pct(stats.correctionRate)}
               tone="red"
               sub={`${stats.corrected} corrected · ${stats.accepted} accepted`}
             />
-            <StatTile
+            <Stat
               label="Unlabeled"
               value={String(stats.unlabeled)}
               sub="classifier was unsure, or no next message yet"
             />
-            <StatTile
+            <Stat
               label="Lines reviewed"
               value={String(stats.diffLines)}
               sub="across all checkpoints"
             />
-          </div>
+          </StatStrip>
 
           {categories.length > 0 && (
             <GlassPanel>
               <PanelHeader
                 title="Corrections"
                 accent="by category"
+                icon={Tags}
                 hint="Three in one category graduate into a candidate preference."
               />
               <div className="pb-2">
@@ -98,7 +102,7 @@ export default async function IntentPage({
           )}
 
           <GlassPanel>
-            <PanelHeader title="Recent" accent="checkpoints" />
+            <PanelHeader title="Recent" accent="checkpoints" icon={History} />
             <div className="pb-2">
               {list.map((c) => (
                 <div

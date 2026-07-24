@@ -250,6 +250,128 @@ export function DeliveryBadge({ delivery }: { delivery: string | null }) {
 
 /* ————— data display ————— */
 
+/**
+ * A group of related metrics as ONE surface divided by hairlines, rather than
+ * N floating cards. Five separate cards say "five unrelated things"; one
+ * divided strip says "five readings of the same thing", which is what they
+ * are. This is the single biggest fix for card sprawl on these pages.
+ */
+export function StatStrip({
+  children,
+  cols = 5,
+  className,
+}: {
+  children: ReactNode;
+  cols?: 2 | 3 | 4 | 5;
+  className?: string;
+}) {
+  const grid = {
+    2: "grid-cols-2",
+    3: "grid-cols-2 sm:grid-cols-3",
+    4: "grid-cols-2 lg:grid-cols-4",
+    5: "grid-cols-2 lg:grid-cols-3 xl:grid-cols-5",
+  }[cols];
+  return (
+    <section
+      className={cx(
+        "glass glass-edge grid overflow-hidden rounded-2xl",
+        // Hairlines BETWEEN cells, drawn with a ring so they never double up
+        // at the seams the way adjacent borders do.
+        "[&>*]:relative [&>*]:px-5 [&>*]:py-4",
+        "divide-x divide-y divide-line",
+        grid,
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
+/** One cell inside a StatStrip. Same vocabulary as StatTile, no card chrome. */
+export function Stat({
+  label,
+  value,
+  sub,
+  spark,
+  href,
+  tone = "neutral",
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  spark?: ReactNode;
+  href?: string;
+  tone?: Tone;
+  icon?: LucideIcon;
+}) {
+  const inner = (
+    <>
+      <div className="flex items-center gap-2">
+        {Icon && (
+          <Icon
+            className={cx(
+              "size-3.5 shrink-0",
+              tone === "neutral" ? "text-faint" : STAT_TONE[tone],
+            )}
+          />
+        )}
+        <span className="truncate text-[11px] font-medium tracking-[0.08em] text-faint uppercase">
+          {label}
+        </span>
+      </div>
+      <div className="mt-2.5 flex items-end justify-between gap-3">
+        <span
+          className={cx(
+            "tnum text-[26px] leading-none font-semibold tracking-[-0.02em]",
+            STAT_TONE[tone] ?? "text-ink",
+          )}
+        >
+          {value}
+        </span>
+        {spark && <div className="shrink-0 opacity-90">{spark}</div>}
+      </div>
+      {sub && <p className="mt-2 text-[11px] leading-snug text-faint">{sub}</p>}
+    </>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      className="group block transition-colors hover:bg-tint focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:outline-none"
+    >
+      {inner}
+    </Link>
+  ) : (
+    <div>{inner}</div>
+  );
+}
+
+/**
+ * Two related panels sharing one surface, split by a single hairline. Used
+ * where the pages previously placed two sibling cards side by side.
+ */
+export function SplitPanel({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cx(
+        "glass glass-edge grid overflow-hidden rounded-2xl",
+        "divide-y divide-line xl:grid-cols-2 xl:divide-x xl:divide-y-0",
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
 const STAT_TONE: Record<string, string> = {
   red: "text-verdict-red",
   green: "text-verdict-green",

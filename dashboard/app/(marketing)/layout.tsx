@@ -28,11 +28,11 @@ export default function MarketingLayout({
           </Link>
 
           <nav className="ml-6 hidden items-center gap-6 text-[13px] text-body md:flex">
-            <a href="#how" className="transition-colors hover:text-ink">
-              How it works
+            <a href="#learns" className="transition-colors hover:text-ink">
+              How it learns
             </a>
-            <a href="#catches" className="transition-colors hover:text-ink">
-              What it catches
+            <a href="#signal" className="transition-colors hover:text-ink">
+              What it learns from
             </a>
             <a href="#proof" className="transition-colors hover:text-ink">
               Proof

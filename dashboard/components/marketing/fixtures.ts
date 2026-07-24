@@ -26,62 +26,76 @@ export const FAILURE_CLASSES = [
 export const TERMINAL_LINES = [
   { kind: "cmd", text: "proofjury guard deploy -- ./deploy.sh" },
   { kind: "ok", text: "lockfile in sync" },
-  { kind: "ok", text: "migrations applied" },
   { kind: "fail", text: "missing_env_var", note: "STRIPE_SECRET_KEY absent in prod" },
-  { kind: "fail", text: "tests_not_run", note: "last run was 4 commits ago" },
   { kind: "gap", text: "" },
-  { kind: "verdict", text: "BLOCKED — the deploy command never ran" },
-  { kind: "recall", text: "recalled chk_001 — same class, 6 days ago" },
+  {
+    kind: "judge",
+    text: "judge · tier 5 · confidence 0.91",
+    note: "STRIPE_SECRET_KEY is read at payments.py:14 but never set in the prod env. The first checkout request will crash.",
+  },
+  {
+    kind: "recall",
+    text: "recalled chk_001 — matched by meaning, not wording (6 days ago)",
+  },
+  {
+    kind: "pref",
+    text: "applied learned preference · graduated from 3 corrections",
+    note: "add new env vars to .env.example in the same commit",
+  },
 ] as const;
 
-export const HOW_IT_WORKS = [
+/** The four stages of how the judge gets better. */
+export const HOW_IT_LEARNS = [
   {
     step: "01",
-    title: "Intercept",
-    lane: "Gate run",
-    body: "The gate wraps the deploy command itself, so there is no path around it. Nothing runs until the checks return.",
+    title: "It judges",
+    lane: "finding",
+    body: "Every run your agent makes, and every moment it claims done, gets reviewed. Findings carry a tier, a confidence, and the evidence behind them — never a bare opinion.",
   },
   {
     step: "02",
-    title: "Decide",
-    lane: "Checks — DECIDES",
-    body: "Deterministic checks alone produce the verdict. The judge writes the explanation afterwards and can never change the outcome.",
+    title: "You label it",
+    lane: "signal",
+    body: "Confirm or reject, one click. That label is the entire training signal; there is no annotation queue and no separate labelling job to run.",
   },
   {
     step: "03",
-    title: "Remember",
-    lane: "Memory — context only",
-    body: "Every block becomes a prior. When the same failure recurs — even worded differently — the gate cites the record that explains it.",
+    title: "It adapts",
+    lane: "ranking + preferences",
+    body: "Classes you keep rejecting get demoted in recall, so noisy advice fades. Corrections that repeat in one category graduate into a preference injected before the agent writes code.",
+  },
+  {
+    step: "04",
+    title: "It retrains",
+    lane: "tuned model",
+    body: "Labelled findings become a corpus paired with the prompts that produced them. One command returns a tuned judge, and adopting it is a single line of config — not a migration.",
   },
 ] as const;
 
-/** Sponsor surfaces. Only browser QA can fail the gate; see judge/page.tsx. */
-export const SPONSORS = [
+/** Where the training signal actually comes from. */
+export const SIGNAL_SOURCES = [
   {
-    name: "Replay",
-    role: "browser QA",
-    note: "The one sponsor-backed check that can fail the gate — from a recorded exit code and a worktree digest, never model output.",
-    decides: true,
+    title: "Every finding you label",
+    body: "Confirmed and rejected advisories become paired training rows. Rejections matter as much as confirmations — they are what teach it to stop.",
+    metric: "labelled advisories",
   },
   {
-    name: "Senso",
-    role: "team conventions",
-    note: "Authored policy the judge may cite, carried into findings with a [source: doc] tag.",
-    decides: false,
+    title: "Every correction you type",
+    body: "When your agent says done and your next message pushes back, that is a labelled outcome. Three in one category graduate into a durable preference.",
+    metric: "labelled checkpoints",
   },
   {
-    name: "Pioneer",
-    role: "judge routing",
-    note: "Which model answered each judge surface. Explanation only.",
-    decides: false,
-  },
-  {
-    name: "Actian",
-    role: "semantic recall",
-    note: "Finds the prior that matches a recurrence even when the wording differs.",
-    decides: false,
+    title: "Every verdict it explains",
+    body: "Each blocked run is stored with its checks, its diff and its diagnosis, so a recurrence months later is recognisable rather than novel.",
+    metric: "resolved records",
   },
 ] as const;
+
+/**
+ * Sponsor copy now lives in lib/sponsors.ts so the dashboard and the landing
+ * page cannot drift on the one thing that must never be misstated: which
+ * integration is allowed to fail a gate. Import SPONSOR_LIST from there.
+ */
 
 /** Numbers shown in the preview chrome. Illustrative, not live. */
 export const PREVIEW = {

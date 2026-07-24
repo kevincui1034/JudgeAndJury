@@ -1,7 +1,7 @@
 /**
  * The interception, as it actually reads in a terminal. Server-safe.
  */
-import { Check, CornerDownLeft, X } from "lucide-react";
+import { Check, CornerDownLeft, Gavel, Sparkles, X } from "lucide-react";
 
 import { TERMINAL_LINES } from "@/components/marketing/fixtures";
 import { cx } from "@/components/ui/primitives";
@@ -65,21 +65,42 @@ export function TerminalCard({ className }: { className?: string }) {
             );
           }
 
-          if (line.kind === "verdict") {
+          // The judge speaking — amber, the one colour reserved for it.
+          if (line.kind === "judge") {
             return (
               <div
                 key={i}
-                className="flex items-center gap-2 rounded-lg bg-verdict-red/10 px-2.5 py-1.5 font-medium text-verdict-red"
+                className="rounded-lg border border-amber/25 bg-amber/8 px-2.5 py-2"
               >
-                <X className="size-3.5 shrink-0" strokeWidth={3} />
-                {line.text}
+                <div className="flex items-center gap-2 text-amber-ink">
+                  <Gavel className="size-3.5 shrink-0" />
+                  {line.text}
+                </div>
+                {"note" in line && line.note && (
+                  <p className="mt-1 pl-5 text-body">{line.note}</p>
+                )}
+              </div>
+            );
+          }
+
+          // A preference that graduated out of repeated corrections.
+          if (line.kind === "pref") {
+            return (
+              <div key={i} className="pl-1 text-bot-teal">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-3.5 shrink-0" />
+                  {line.text}
+                </div>
+                {"note" in line && line.note && (
+                  <p className="mt-0.5 pl-5 text-faint">“{line.note}”</p>
+                )}
               </div>
             );
           }
 
           return (
-            <div key={i} className="flex items-center gap-2 pl-1 text-bot-violet">
-              <CornerDownLeft className="size-3.5 shrink-0" />
+            <div key={i} className="flex items-start gap-2 pl-1 text-bot-violet">
+              <CornerDownLeft className="mt-0.5 size-3.5 shrink-0" />
               {line.text}
             </div>
           );

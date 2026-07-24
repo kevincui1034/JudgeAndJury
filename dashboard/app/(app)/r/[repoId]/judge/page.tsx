@@ -1,5 +1,11 @@
 import { eq } from "drizzle-orm";
+import { Activity, CircleDollarSign, Cpu, Layers, Plug } from "lucide-react";
 
+import {
+  AuthorityBadge,
+  SponsorMark,
+  SponsorTag,
+} from "@/components/sponsors/SponsorMark";
 import {
   Badge,
   EmptyState,
@@ -8,7 +14,9 @@ import {
   PageHeader,
   PanelHeader,
   RankedRow,
-  StatTile,
+  SplitPanel,
+  Stat,
+  StatStrip,
   timeAgo,
 } from "@/components/ui/primitives";
 import { db } from "@/db";
@@ -22,6 +30,7 @@ import {
   recallStats,
 } from "@/lib/queries/judge";
 import { requireRepo } from "@/lib/repo";
+import { SPONSORS, SPONSOR_LIST, type Sponsor } from "@/lib/sponsors";
 
 export default async function JudgePage({
   params,
@@ -52,6 +61,18 @@ export default async function JudgePage({
   const servedModels = new Set(surfaces.map((s) => s.model));
   const maxCost = costs[0]?.cost || 1;
 
+  /**
+   * The value the CLI reported for a sponsor's capability. The registry's
+   * capabilityKey is typed to the exact set emitted by _capabilities() in
+   * cli/src/proofjury/sync.py, so no alias layer is needed — if that ever
+   * drifts, the union in lib/sponsors.ts is what should be corrected.
+   */
+  function capabilityValue(sponsor: Sponsor): unknown {
+    const v = caps[sponsor.capabilityKey];
+    if (v !== undefined && v !== null && v !== "" && v !== "none") return v;
+    return undefined;
+  }
+
   return (
     <div className="space-y-4 pb-2">
       <PageHeader
@@ -60,53 +81,107 @@ export default async function JudgePage({
         sub={
           <>
             Which model answered each judge surface, what it cost, and which
-          authored policy it cited. All of it explains verdicts the
-          deterministic checks already reached.
+            authored policy it cited. All of it explains verdicts the
+            deterministic checks already reached.
           </>
         }
       />
 
-      {/* capability chips — computed CLI-side, no secrets uploaded */}
-      {cfg && (
-        <div className="flex flex-wrap gap-1.5 px-1">
-          <Badge tone={caps.judge_provider ? "amber" : "faint"} mono>
-            judge: {String(caps.judge_provider ?? "none")}
-          </Badge>
-          <Badge tone={caps.semantic ? "violet" : "faint"}>
-            semantic recall {caps.semantic ? "on" : "off"}
-          </Badge>
-          <Badge tone={caps.conventions ? "amber" : "faint"}>
-            conventions {caps.conventions ? "on" : "off"}
-          </Badge>
-          <Badge tone={caps.browser_qa ? "green" : "faint"}>
-            browser QA {caps.browser_qa ? "configured" : "not configured"}
-          </Badge>
-          <span className="self-center text-[11px] text-faint">
-            reported {timeAgo(cfg.reportedAt)}
-          </span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
+      {/* ── one surface, four readings of the same judge activity ── */}
+      <StatStrip cols={4}>
+        <Stat
           label="Models served"
           value={String(servedModels.size)}
           tone="amber"
           sub="distinct models that answered"
+          icon={Cpu}
         />
-        <StatTile label="Judge calls" value={String(totalCalls || "—")} />
-        <StatTile
+        <Stat
+          label="Judge calls"
+          value={String(totalCalls || "—")}
+          sub="ledger lines uploaded by the CLI"
+          icon={Activity}
+        />
+        <Stat
           label="Judge spend"
           value={totalCalls ? `$${totalCost.toFixed(4)}` : "—"}
-          sub={totalCalls && totalCost === 0 ? "credit-billed — no USD rate" : undefined}
+          sub={
+            totalCalls && totalCost === 0
+              ? "credit-billed — no USD rate"
+              : undefined
+          }
+          icon={CircleDollarSign}
         />
-        <StatTile
+        <Stat
           label="Training rows ready"
           value={String(tune.trainingRows)}
           tone="green"
           sub="labeled advisories + checkpoints"
+          icon={Layers}
         />
-      </div>
+      </StatStrip>
+
+      {/* ── the four integrations, and what each is allowed to decide ──
+          Configured state is computed CLI-side and uploaded as names and
+          booleans only; no secret ever leaves the machine. */}
+      <GlassPanel>
+        <PanelHeader
+          title="Integrations"
+          accent="on this repo"
+          icon={Plug}
+          hint="What each partner surface contributes, where its output lands, and what it is allowed to decide."
+          right={
+            cfg ? (
+              <span className="text-[11px] text-faint">
+                reported {timeAgo(cfg.reportedAt)}
+              </span>
+            ) : (
+              <Badge tone="faint">no config reported</Badge>
+            )
+          }
+        />
+        <div className="pb-2">
+          {SPONSOR_LIST.map((s) => {
+            const value = capabilityValue(s);
+            const on = Boolean(value);
+            // judge_provider reports a provider name, the rest report booleans.
+            const detail = typeof value === "string" ? value : null;
+            return (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line/70 px-5 py-3"
+              >
+                <SponsorMark sponsor={s} />
+                <div className="w-40 min-w-0 shrink-0">
+                  <p className="truncate text-[13px] text-ink">{s.name}</p>
+                  <p className="truncate text-[11px] text-faint">{s.role}</p>
+                </div>
+                <AuthorityBadge sponsor={s} />
+                <Badge tone={on ? "green" : "faint"}>
+                  {on ? "configured" : "not configured"}
+                </Badge>
+                {detail && (
+                  <Badge tone="amber" mono>
+                    {detail}
+                  </Badge>
+                )}
+                <span
+                  className="min-w-0 flex-1 truncate text-right text-[11.5px] text-faint"
+                  title={s.note}
+                >
+                  {s.surface}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="border-t border-line/70 px-5 py-3 text-[11.5px] leading-relaxed text-faint">
+          Exactly one of these can fail the gate, and it does so from a recorded
+          exit code and a worktree digest rather than model output. The rest are
+          evidence, context, or transport — they shape how a verdict is
+          explained, never what it is.
+        </p>
+      </GlassPanel>
 
       {/* ── Pioneer: the router made visible ── */}
       <GlassPanel>
@@ -114,6 +189,7 @@ export default async function JudgePage({
           title="Model"
           accent="routing"
           hint="Every request asks for the router; the record says which model actually answered. That mapping IS the routing decision."
+          right={<SponsorTag sponsor={SPONSORS.pioneer} />}
         />
         {surfaces.length === 0 ? (
           <EmptyState
@@ -163,10 +239,14 @@ export default async function JudgePage({
         )}
       </GlassPanel>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        {/* ── cost ── */}
-        <GlassPanel>
-          <PanelHeader title="Cost" accent="by model" />
+      {/* ── two readings of the same judge run: what it cost, what it recalled ── */}
+      <SplitPanel>
+        <div>
+          <PanelHeader
+            title="Cost"
+            accent="by model"
+            right={<SponsorTag sponsor={SPONSORS.pioneer} />}
+          />
           {costs.length === 0 ? (
             <EmptyState
               title="No ledger entries yet."
@@ -186,14 +266,14 @@ export default async function JudgePage({
               ))}
             </div>
           )}
-        </GlassPanel>
+        </div>
 
-        {/* ── recall provenance ── */}
-        <GlassPanel>
+        <div>
           <PanelHeader
             title="Recall"
             accent="provenance"
             hint="Priors are context, never authority — they can never short-circuit a verdict."
+            right={<SponsorTag sponsor={SPONSORS.actian} />}
           />
           <div className="grid grid-cols-3 gap-3 px-5 pb-5">
             {[
@@ -209,8 +289,8 @@ export default async function JudgePage({
               </div>
             ))}
           </div>
-        </GlassPanel>
-      </div>
+        </div>
+      </SplitPanel>
 
       {/* ── Senso: cited conventions ── */}
       <GlassPanel>
@@ -218,6 +298,7 @@ export default async function JudgePage({
           title="Team"
           accent="conventions cited"
           hint="Authored policy the judge referenced, parsed back out of the stored prompt with its source citation."
+          right={<SponsorTag sponsor={SPONSORS.senso} />}
         />
         {conventions.length === 0 ? (
           <EmptyState
@@ -253,6 +334,12 @@ export default async function JudgePage({
           title="Browser"
           accent="QA"
           hint="The one sponsor-backed check that can fail the gate — from a recorded exit code and a worktree digest, never model output."
+          right={
+            <>
+              <AuthorityBadge sponsor={SPONSORS.replay} />
+              <SponsorTag sponsor={SPONSORS.replay} />
+            </>
+          }
         />
         {qa.length === 0 ? (
           <EmptyState

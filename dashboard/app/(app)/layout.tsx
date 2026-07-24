@@ -3,6 +3,18 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { AppHeader } from "@/components/shell/AppHeader";
 
+/**
+ * App shell.
+ *
+ * Deliberately NOT a card containing cards. The previous shell nested an
+ * inset .app-pane inside the page, then floated a header card, a rail card and
+ * one card per panel inside that — four levels of rounded, bordered, shadowed
+ * boxes. Everything read as equally important and the eye had nowhere to rest.
+ *
+ * Now the page itself is the surface: one full-bleed header separated by a
+ * hairline, one rail separated by a hairline, and content that groups related
+ * panels instead of scattering them.
+ */
 export default async function AppLayout({
   children,
 }: {
@@ -19,22 +31,12 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col gap-3 p-3 lg:gap-4 lg:p-5">
-      <div className="mx-auto w-full max-w-[1720px]">
-        <AppHeader
-          email={session.user.email ?? "signed in"}
-          signOutAction={signOutAction}
-        />
-      </div>
-
-      <div className="app-pane mx-auto flex w-full max-w-[1720px] flex-1 gap-4 rounded-[26px] p-3 lg:p-4">
-        {children}
-      </div>
-
-      <footer className="mx-auto w-full max-w-[1720px] px-2 pb-1 text-[11px] text-faint">
-        Deterministic checks decide. The judge only explains — and every
-        sponsor surface is context, never a verdict.
-      </footer>
+    <div className="min-h-dvh">
+      <AppHeader
+        email={session.user.email ?? "signed in"}
+        signOutAction={signOutAction}
+      />
+      <div className="flex items-start">{children}</div>
     </div>
   );
 }

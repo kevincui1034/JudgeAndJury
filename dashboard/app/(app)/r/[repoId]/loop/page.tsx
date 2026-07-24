@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MessagesSquare } from "lucide-react";
 
 import { AdvisoryActions } from "@/components/AdvisoryActions";
 import {
@@ -10,7 +11,8 @@ import {
   Mono,
   PageHeader,
   PanelHeader,
-  StatTile,
+  Stat,
+  StatStrip,
   timeAgo,
 } from "@/components/ui/primitives";
 import { loopFeed } from "@/lib/queries/intent";
@@ -47,32 +49,33 @@ export default async function LoopPage({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Total findings" value={String(feed.length)} />
-        <StatTile
+      <StatStrip cols={4}>
+        <Stat label="Total findings" value={String(feed.length)} />
+        <Stat
           label="Delivered to agent"
           value={String(delivered)}
           tone="amber"
           sub="injected or drained"
         />
-        <StatTile
+        <Stat
           label="Awaiting you"
           value={String(held)}
           tone={held > 0 ? "red" : "neutral"}
           sub="held below the auto-inject bar"
         />
-        <StatTile
+        <Stat
           label="You labeled"
           value={String(labelled)}
           tone="green"
           sub="feeds recall + the fine-tune corpus"
         />
-      </div>
+      </StatStrip>
 
       <GlassPanel>
         <PanelHeader
           title="The"
           accent="conversation"
+          icon={MessagesSquare}
           hint="Newest first. Gate advisories run at deploy time; intent findings run when the agent claims done."
         />
         {feed.length === 0 ? (

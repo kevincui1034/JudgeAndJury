@@ -1,3 +1,5 @@
+import { BookMarked } from "lucide-react";
+
 import {
   Badge,
   EmptyState,
@@ -5,6 +7,8 @@ import {
   Mono,
   PageHeader,
   PanelHeader,
+  Stat,
+  StatStrip,
   timeAgo,
 } from "@/components/ui/primitives";
 import { listPreferences } from "@/lib/queries/intent";
@@ -25,6 +29,10 @@ export default async function PrefsPage({
   const { repo, user } = await requireRepo(repoId);
   const prefs = await listPreferences(repo.id, user.id!);
 
+  const active = prefs.filter((p) => p.status === "active").length;
+  const candidates = prefs.filter((p) => p.status === "candidate").length;
+  const rejected = prefs.filter((p) => p.status === "rejected").length;
+
   return (
     <div className="space-y-4 pb-2">
       <PageHeader
@@ -40,8 +48,30 @@ export default async function PrefsPage({
         }
       />
 
+      {prefs.length > 0 && (
+        <StatStrip cols={3}>
+          <Stat
+            label="Active"
+            value={String(active)}
+            tone="green"
+            sub="injected at session start"
+          />
+          <Stat
+            label="Candidates"
+            value={String(candidates)}
+            tone={candidates > 0 ? "amber" : "neutral"}
+            sub="waiting on you"
+          />
+          <Stat label="Rejected" value={String(rejected)} sub="never injected" />
+        </StatStrip>
+      )}
+
       <GlassPanel>
-        <PanelHeader title="Preferences" accent={`(${prefs.length})`} />
+        <PanelHeader
+          title="Preferences"
+          accent={`(${prefs.length})`}
+          icon={BookMarked}
+        />
         {prefs.length === 0 ? (
           <EmptyState
             title="No preferences yet."

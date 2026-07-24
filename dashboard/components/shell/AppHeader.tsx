@@ -1,6 +1,7 @@
 /**
- * The app-wide top bar. Lives in app/(app)/layout.tsx rather than the repo
- * layout so /repos gets it too — that route has no NavRail.
+ * The app-wide top bar — full-bleed and separated by a hairline rather than
+ * floated as a rounded card. Lives in app/(app)/layout.tsx so /repos gets it
+ * too; that route has no NavRail.
  *
  * Server component; only the two interactive leaves (WorldToggle, UserMenu)
  * are client.
@@ -15,36 +16,28 @@ import { LogoTile, Wordmark } from "@/components/ui/Logo";
 export function AppHeader({
   email,
   signOutAction,
-  left,
   right,
 }: {
   email: string;
   signOutAction: () => Promise<void>;
-  /** Breadcrumb / repo switcher, injected by the route that knows the repo. */
-  left?: ReactNode;
   right?: ReactNode;
 }) {
   return (
-    <header className="glass glass-edge sticky top-0 z-30 flex h-14 items-center gap-3 rounded-2xl px-3 sm:px-4">
-      <Link
-        href="/repos"
-        className="flex shrink-0 items-center gap-2.5 rounded-lg transition-opacity hover:opacity-80"
-      >
-        <LogoTile />
-        <Wordmark className="hidden sm:inline" />
-      </Link>
+    <header className="sticky top-0 z-30 h-14 border-b border-line bg-surface/85 backdrop-blur-xl">
+      <div className="flex h-full items-center gap-3 px-4 sm:px-5">
+        <Link
+          href="/repos"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg transition-opacity hover:opacity-80"
+        >
+          <LogoTile />
+          <Wordmark className="hidden sm:inline" />
+        </Link>
 
-      {left && (
-        <>
-          <span aria-hidden className="h-5 w-px shrink-0 bg-line-2" />
-          <div className="min-w-0 flex-1">{left}</div>
-        </>
-      )}
-
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {right}
-        <WorldToggle />
-        <UserMenu email={email} signOutAction={signOutAction} />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {right}
+          <WorldToggle />
+          <UserMenu email={email} signOutAction={signOutAction} />
+        </div>
       </div>
     </header>
   );
