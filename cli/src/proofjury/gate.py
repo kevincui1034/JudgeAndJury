@@ -217,6 +217,22 @@ def _active_preference_statements(root: Path, env) -> list[str]:
         return []
 
 
+def _team_conventions(root: Path, env, task_ref, changed_files) -> list[str]:
+    """Human-AUTHORED team conventions for the advisory prompt
+    (PLAN-swarmhack H5). Off by default and firewalled: any error → no
+    section, and the prompt is byte-identical to a run without Senso."""
+    try:
+        from .config import conventions_enabled
+        from .judge.conventions import fetch_conventions
+
+        config = load_config(root)
+        if not conventions_enabled(config, env):
+            return []
+        return fetch_conventions(changed_files or [], task_ref, env, config)
+    except Exception:
+        return []
+
+
 def _advisory_cache_hit(store: MemoryStore, repo_id: str, inputs_hash: str) -> bool:
     """True when the advisory judge already reviewed these exact inputs
     (same ``inputs_hash``, non-empty ``advisory_output``) — re-running the
@@ -503,6 +519,9 @@ def run_gate(
                 rejected_concerns=sorted(rejected.values()),
                 impact_summary=impact_note or "",
                 preferences=_active_preference_statements(root, env),
+                conventions=_team_conventions(
+                    root, env, task_ref, run_context.changed_files
+                ),
             )
             advisory_input_text = advisory_input.to_prompt_text()
             advisory_result = adv_engine.review(advisory_input)

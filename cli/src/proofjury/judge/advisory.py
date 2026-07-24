@@ -90,6 +90,11 @@ class AdvisoryInput:
     #: — statements only. Empty list → the section is omitted entirely,
     #: keeping pre-preference prompts byte-identical.
     preferences: list[str] = field(default_factory=list)
+    #: Human-AUTHORED team conventions from the org KB, each carrying a
+    #: ``[source: <doc>]`` citation (PLAN-swarmhack H5). Distinct from
+    #: ``preferences``, which are LEARNED from corrections. Empty list →
+    #: section omitted, so the prompt is byte-identical without Senso.
+    conventions: list[str] = field(default_factory=list)
 
     def to_prompt_text(self) -> str:
         lines = [
@@ -119,6 +124,13 @@ class AdvisoryInput:
         if self.preferences:
             lines.append("Active user preferences (weigh discoveries against these):")
             lines += [f"- {statement}" for statement in self.preferences]
+            lines.append("")
+        if self.conventions:
+            lines.append(
+                "Team conventions authored by this org (cite the source in any "
+                "finding that relies on one):"
+            )
+            lines += [f"- {statement}" for statement in self.conventions]
             lines.append("")
         lines.append("Prior records in this repo (with outcome labels):")
         if self.priors:

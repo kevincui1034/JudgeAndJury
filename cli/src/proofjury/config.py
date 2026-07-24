@@ -423,6 +423,45 @@ def checkpoints_enabled(
     return checkpoint_settings(repo_config)["enabled"]
 
 
+#: Defaults for the repo-level ``.proofjury.toml [conventions]`` table —
+#: human-authored team policy fetched from a Senso KB (PLAN-swarmhack H5).
+#: Unlike every other context surface this defaults OFF: it is the only one
+#: that leaves the machine, so participation is an explicit opt-in.
+CONVENTIONS_DEFAULTS = {
+    "enabled": False,
+    "senso_kb": None,   # None → SENSO_KB_ID from the environment
+    "max_results": 5,
+}
+
+
+def conventions_settings(repo_config: dict | None) -> dict:
+    """The ``[conventions]`` table merged over ``CONVENTIONS_DEFAULTS``.
+    Malformed values fall back to the default for that key."""
+    settings = dict(CONVENTIONS_DEFAULTS)
+    table = (repo_config or {}).get("conventions")
+    if not isinstance(table, dict):
+        return settings
+    if isinstance(table.get("enabled"), bool):
+        settings["enabled"] = table["enabled"]
+    kb = table.get("senso_kb")
+    if isinstance(kb, str) and kb.strip():
+        settings["senso_kb"] = kb.strip()
+    value = table.get("max_results")
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+        settings["max_results"] = value
+    return settings
+
+
+def conventions_enabled(
+    repo_config: dict | None, env: Mapping[str, str] | None = None
+) -> bool:
+    """``PROOFJURY_NO_CONVENTIONS`` (any non-empty value) wins over config —
+    the same belt-and-braces off switch the other context surfaces have."""
+    if _env(env).get("PROOFJURY_NO_CONVENTIONS"):
+        return False
+    return conventions_settings(repo_config)["enabled"]
+
+
 #: Defaults for the repo-level ``.proofjury.toml [prefs]`` table — learned
 #: user preferences (ROADMAP-intent.md I4). Only ``active`` (human-approved)
 #: preferences are ever injected; candidates just wait in `proofjury prefs`.

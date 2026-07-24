@@ -492,6 +492,22 @@ def maybe_graduate(
 # --------------------------------------------------------------------------
 
 
+def _team_conventions(root: Path, env: Mapping[str, str], task, changed) -> list[str]:
+    """Authored team conventions for the checkpoint reviewer (H5). Same
+    firewall as the gate: off by default, any error → no section, prompt
+    byte-identical to a run without Senso."""
+    try:
+        from .config import conventions_enabled
+        from .judge.conventions import fetch_conventions
+
+        config = load_config(root)
+        if not conventions_enabled(config, env):
+            return []
+        return fetch_conventions(changed or [], task, env, config)
+    except Exception:
+        return []
+
+
 def _review_input(root: Path, env: Mapping[str, str], record: dict) -> str:
     """Reviewer input — persisted verbatim as ``checkpoint_input`` (the
     training feature IS the runtime prompt, like advisory_input)."""
@@ -521,6 +537,14 @@ def _review_input(root: Path, env: Mapping[str, str], record: dict) -> str:
     lines.append("")
     lines.append("Recent corrections on these files:")
     lines += [f"- {s}" for s in recent_corrections[-5:]] or ["- none"]
+    conventions = _team_conventions(root, env, record.get("task"), sorted(changed))
+    if conventions:
+        lines.append("")
+        lines.append(
+            "Team conventions authored by this org (cite the source in any "
+            "finding that relies on one):"
+        )
+        lines += [f"- {statement}" for statement in conventions]
     return "\n".join(lines)
 
 
