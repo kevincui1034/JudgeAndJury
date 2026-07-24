@@ -787,6 +787,79 @@ def memory_export(
             sys.stdout.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+@memory_app.command("finetune")
+def memory_finetune(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Build the dataset and report counts; submit nothing."
+    ),
+    output: Path = typer.Option(
+        None, "-o", "--output", help="Where to write the dataset JSONL."
+    ),
+    base_model: str = typer.Option(
+        None, "--base-model", help="Base model to tune (provider default if unset)."
+    ),
+) -> None:
+    """Fine-tune the judge on this repo's own labeled records.
+
+    Pairs each persisted judge INPUT with the outcome a human labeled —
+    the prompt and the training feature are the same string by design, so
+    the dataset is a projection of the memory store.
+
+    proofjury memory finetune --dry-run
+    """
+    from .checkpoint import get_store as get_ckpt_store
+    from .memory.finetune import (
+        PIONEER_DOCS_URL,
+        build_dataset,
+        dataset_stats,
+        submit,
+        write_jsonl,
+    )
+
+    console = Console(highlight=False)
+    root = Path.cwd()
+    rows = build_dataset(_store(), get_ckpt_store(root))
+    if not rows:
+        _fail(
+            "no labeled records to train on — label findings with "
+            "`proofjury advisory confirm|reject <ID>` first",
+            1,
+        )
+        return  # unreachable
+
+    stats = dataset_stats(rows)
+    path = write_jsonl(rows, output or (root / ".proofjury" / "finetune.jsonl"))
+
+    table = Table(title="proofjury fine-tune dataset", box=box.SIMPLE_HEAD)
+    table.add_column("surface", style="bold")
+    table.add_column("label")
+    table.add_column("rows", justify="right")
+    for kind in sorted(k for k in stats if k != "total"):
+        for label, count in sorted(stats[kind].items()):
+            table.add_row(kind, label, str(count))
+    console.print(table)
+    console.print(f"dataset → {path} ({stats['total']} rows)")
+
+    if dry_run:
+        console.print("[dim]--dry-run: nothing submitted[/dim]")
+        return
+
+    job_ref = submit(path, os.environ, base_model=base_model)
+    if job_ref is None:
+        _fail(
+            "could not start the fine-tune (no PIONEER_API_KEY, or the API "
+            f"call failed) — the dataset is still at {path}",
+            1,
+        )
+        return  # unreachable
+    console.print(f"✓ fine-tune job started: [bold]{job_ref}[/bold]")
+    console.print(f"  track it at {PIONEER_DOCS_URL}")
+    console.print(
+        "  when it completes, point [bold][advisory].model[/bold] / "
+        "[bold][checkpoint].model[/bold] at the job id to run the tuned judge"
+    )
+
+
 @memory_app.command("stats")
 def memory_stats(
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
