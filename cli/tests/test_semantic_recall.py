@@ -450,10 +450,16 @@ def test_actian_point_ids_are_stable_and_reversible():
     assert 0 < _point_id("chk_012") < 2**63
 
 
-def test_open_actian_backend_none_without_client():
+def test_open_actian_backend_none_when_unreachable():
+    """The universal degradation point: no library OR no reachable server
+    yields None, and everything upstream falls back to heuristic recall.
+
+    (This used to assert on the library being absent; the client is now a
+    real dependency of the [semantic] extra, so the meaningful case is an
+    unreachable server — port 1 is never listening.)"""
     from proofjury.memory.semantic import open_actian_backend
 
-    assert open_actian_backend("localhost:6574") is None
+    assert open_actian_backend("127.0.0.1:1") is None
 
 
 # --------------------------------------------------------------------------

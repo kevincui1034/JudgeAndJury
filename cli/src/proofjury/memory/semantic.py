@@ -87,12 +87,16 @@ def open_actian_backend(dsn: str) -> VectorBackend | None:
     is not reachable — which is what makes the whole feature degrade to
     today's heuristic recall rather than break the gate.
     """
-    try:  # pragma: no cover — requires actian-vectorai-client installed
+    try:
         from actian_vectorai import VectorAIClient  # type: ignore[import-not-found]
     except Exception:
         return None
-    try:  # pragma: no cover
+    try:
         client = VectorAIClient(dsn)
+        # REQUIRED: the client is lazy — `collections`/`points` raise
+        # ConnectionError (503) until connect() has run. Verified against
+        # actian-vectorai-client 1.0.x.
+        client.connect()
         client.health_check()
         return _ActianBackend(client)
     except Exception:
@@ -102,10 +106,11 @@ def open_actian_backend(dsn: str) -> VectorBackend | None:
 def _point_id(doc_id: str) -> int:
     """Stable unsigned 63-bit id for a Proofjury record id.
 
-    Actian points are keyed by integer, but Proofjury ids are strings
-    ("chk_012", "correction:ckpt_003"). Hashing keeps upserts idempotent
-    for the same record, and the original string rides along in the
-    payload so search results can be mapped back exactly.
+    Actian point ids must be an integer or a valid UUID — a plain string
+    like "chk_012" is rejected with 422 ("String ID must be a valid
+    UUID"), verified against a live server. Hashing keeps upserts
+    idempotent for the same record, and the original string rides along
+    in the payload so search results map back exactly.
     """
     return int.from_bytes(hashlib.sha1(doc_id.encode("utf-8")).digest()[:8], "big") >> 1
 
@@ -125,19 +130,46 @@ class _ActianBackend:  # pragma: no cover — exercised only with the SDK presen
         self._client = client
         self._ready = False
 
-    def _ensure_collection(self, size: int) -> None:
-        if self._ready:
+    def _ensure_collection(self, size: int, force: bool = False) -> None:
+        """Create the collection once, on first use.
+
+        Checked with exists() rather than create-and-swallow: blanket
+        swallowing logged a server-side error on EVERY call after the
+        first, and would equally have hidden a genuine create failure —
+        which then surfaces later as a confusing CollectionNotFound on
+        upsert. Creation races benignly (two gates starting at once both
+        create), so an "already exists" failure is tolerated.
+
+        ``force`` skips the exists() probe. That matters because exists()
+        can LIE: after a server restart it answered True while the very
+        next upsert 404'd, so the recovery path must attempt creation
+        rather than trust it.
+        """
+        if self._ready and not force:
             return
         from actian_vectorai import Distance, VectorParams  # type: ignore
 
-        try:
-            self._client.collections.create(
-                self.COLLECTION,
-                vectors_config=VectorParams(size=size, distance=Distance.Cosine),
-            )
-        except Exception:
-            pass  # already exists — the common case after the first run
+        if force or not self._client.collections.exists(self.COLLECTION):
+            try:
+                self._client.collections.create(
+                    self.COLLECTION,
+                    vectors_config=VectorParams(size=size, distance=Distance.Cosine),
+                )
+            except Exception:
+                # Already there (a race, or the stale-exists case) — fine.
+                # The caller retries the real operation and surfaces any
+                # genuine failure at its best-effort boundary.
+                pass
         self._ready = True
+
+    # KNOWN LIMITATION (measured, not theorised): if the server restarts
+    # while this client is alive, the collection is gone and every later
+    # call 404s. Neither re-creating nor client.connect() recovers it — the
+    # channel and the server's collection state are both stale. It is left
+    # unhandled on purpose: each gate run builds a fresh client, so this
+    # only bites a long-lived process, and the caller's best-effort
+    # boundary already degrades it to "no semantic recall" with no crash
+    # and no change to the verdict.
 
     def upsert(self, doc_id: str, vector: Sequence[float], metadata: dict) -> None:
         from actian_vectorai import PointStruct  # type: ignore
