@@ -16,6 +16,7 @@ from proofjury.judge import (
     OpenRouterJudge,
     get_judge,
 )
+from proofjury.judge._openai_compat import MAX_TOKENS
 from proofjury.judge.deterministic import MODEL_ID as DETERMINISTIC_MODEL_ID
 
 
@@ -261,7 +262,7 @@ def test_anthropic_success_parses_and_writes_ledger(tmp_path):
     assert seen["url"] == "https://api.anthropic.com/v1/messages"
     assert seen["x_api_key"] == "sk-ant-key"
     assert seen["version"] == "2023-06-01"
-    assert seen["body"]["max_tokens"] == 700
+    assert seen["body"]["max_tokens"] == MAX_TOKENS
     assert seen["body"]["system"].startswith("You are Proofjury's deploy-readiness judge")
     # system is a top-level field, never a message role
     assert [m["role"] for m in seen["body"]["messages"]] == ["user"]
@@ -359,7 +360,7 @@ def test_openai_success_parses_and_writes_ledger(tmp_path):
     assert output.cost_usd > 0
     assert seen["url"] == "https://api.openai.com/v1/chat/completions"
     assert seen["auth"] == "Bearer sk-openai"
-    assert seen["body"]["max_tokens"] == 700
+    assert seen["body"]["max_tokens"] == MAX_TOKENS
     assert "usage" not in seen["body"]  # OpenAI: do NOT send usage.include
     assert seen["body"]["messages"][0]["role"] == "system"
     assert "STRIPE_API_KEY (payments.py:14)" in seen["body"]["messages"][1]["content"]

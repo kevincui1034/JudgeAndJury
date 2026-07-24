@@ -27,6 +27,23 @@ from .deterministic import DeterministicJudge, compile_fix_steps
 
 TIMEOUT_SECONDS = 20.0
 
+#: Output ceiling for every judge surface. Derived, not guessed — a reply
+#: that runs past this is cut mid-JSON, and the parse fallback then keeps
+#: the severed text as the diagnosis, which is what a blocked user reads.
+#:
+#: The worst case is bounded by the deterministic core: there are ten
+#: checks, so at most ten simultaneous failures, so at most a 2-4 sentence
+#: diagnosis plus ten fix steps. Measured against exactly that input
+#: (n=13 live calls): mean 939, sigma 128, max observed 1178. Taking
+#: mean+3sigma ~= 1322 as the requirement covers a router that picks a
+#: wordier model than the one sampled; +20% headroom rounds to 1600.
+#:
+#: Raising this does not raise spend — it is a cap, not a reservation, and
+#: billing follows tokens actually generated (measured mean stays ~939).
+#: Shared by all three adapters because the bound comes from the response
+#: SHAPE, which is provider-independent; three copies would drift.
+MAX_TOKENS = 1600
+
 SYSTEM_PROMPT = (
     "You are Proofjury's deploy-readiness judge. You receive deterministic "
     "check failures with file:line evidence for a blocked action. Explain "

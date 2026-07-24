@@ -11,11 +11,10 @@ this calls the REST endpoint directly, exactly like the OpenRouter adapter.
 
 from __future__ import annotations
 
-from ._openai_compat import ChatCompletionsJudge, token_cost
+from ._openai_compat import MAX_TOKENS, ChatCompletionsJudge, token_cost
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_MODEL = "gpt-4o-mini"
-MAX_TOKENS = 700
 
 #: USD per 1M tokens: (input, output). Unknown model → cost 0.0.
 PRICE = {

@@ -28,7 +28,7 @@ a config change rather than a code change: point ``[checkpoint].model`` /
 
 from __future__ import annotations
 
-from ._openai_compat import ChatCompletionsJudge, token_cost
+from ._openai_compat import MAX_TOKENS, ChatCompletionsJudge, token_cost
 
 PIONEER_URL = "https://api.pioneer.ai/v1/chat/completions"
 
@@ -49,7 +49,6 @@ PIONEER_URL = "https://api.pioneer.ai/v1/chat/completions"
 #: catalog id (``GET https://api.pioneer.ai/v1/models`` for chat,
 #: ``/base-models`` for embeddings), or a tuned job id from H2.
 DEFAULT_MODEL = "pioneer/auto"
-MAX_TOKENS = 700
 
 #: Pioneer routes to models it does not own, so the bare id it echoes back
 #: ("gpt-4.1") would be indistinguishable from a direct OpenAI call in the

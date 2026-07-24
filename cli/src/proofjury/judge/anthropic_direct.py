@@ -22,6 +22,7 @@ from pathlib import Path
 import httpx
 
 from ._openai_compat import (
+    MAX_TOKENS,
     SYSTEM_PROMPT,
     TIMEOUT_SECONDS,
     append_ledger,
@@ -34,7 +35,6 @@ from .deterministic import DeterministicJudge
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-haiku-4-5"
-MAX_TOKENS = 700
 
 #: USD per 1M tokens: (input, output). Unknown model → cost 0.0.
 PRICE = {

@@ -27,6 +27,7 @@ from proofjury.judge.advisory import (
     PioneerAdvisoryJudge,
     get_advisory_judge,
 )
+from proofjury.judge._openai_compat import MAX_TOKENS
 from proofjury.judge.deterministic import MODEL_ID as DETERMINISTIC_MODEL_ID
 from proofjury.judge.intent import get_intent_chat
 from proofjury.judge.pioneer import PIONEER_URL
@@ -93,7 +94,7 @@ def test_pioneer_success_parses_and_writes_ledger(tmp_path):
     # Pioneer authenticates with X-API-Key, NOT Authorization: Bearer.
     assert seen["api_key_header"] == "pk-test"
     assert seen["auth_header"] is None
-    assert seen["body"]["max_tokens"] == 700
+    assert seen["body"]["max_tokens"] == MAX_TOKENS
     # OpenRouter's usage-accounting opt-in must never leak onto Pioneer.
     assert "usage" not in seen["body"]
     assert seen["body"]["messages"][0]["role"] == "system"
@@ -245,6 +246,36 @@ def test_stats_aggregates_savings_separately_from_spend(tmp_path):
     assert data["by_model"]["pioneer/a"]["saved_usd"] == pytest.approx(2.0)
     # A provider that reports no savings reads as 0.0, never as missing.
     assert data["by_model"]["openai/gpt-4o-mini"]["saved_usd"] == 0.0
+
+
+def test_output_ceiling_clears_the_worst_case_the_gate_can_produce(tmp_path):
+    """MAX_TOKENS must cover a maximal block, not a typical one.
+
+    There are ten deterministic checks, so the largest reply the judge can
+    be asked for is a 2-4 sentence diagnosis plus ten fix steps. Measured
+    against exactly that input over 13 live calls: mean 939, sigma 128,
+    max 1178. The ceiling has to clear the mean+3sigma requirement (~1322)
+    with the intended 20% headroom — below that, replies are severed
+    mid-JSON and the blocked user reads a truncated diagnosis.
+    """
+    measured_mean, measured_sigma = 939, 128
+    requirement = measured_mean + 3 * measured_sigma
+    assert MAX_TOKENS >= requirement * 1.2
+
+    # And every adapter must send that same ceiling — three copies drift.
+    from proofjury.judge import anthropic_direct, openai_direct, pioneer
+
+    assert pioneer.MAX_TOKENS == openai_direct.MAX_TOKENS == anthropic_direct.MAX_TOKENS
+
+
+def test_the_ceilings_ten_check_assumption_is_still_true():
+    """The bound above is derived from "at most ten failures, so at most
+    ten fix steps". Registering an 11th check invalidates that derivation,
+    so it must fail here and force a re-measure — not silently outgrow the
+    ceiling and start truncating diagnoses again."""
+    from proofjury.checks.base import REGISTRY
+
+    assert len(REGISTRY) == 10
 
 
 def test_pioneer_default_model_is_the_router():
