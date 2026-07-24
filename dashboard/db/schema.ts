@@ -382,6 +382,27 @@ export const ledgerEntries = pgTable(
  * patches; `conflicts` carries patches the CLI refused to apply because
  * the local file had moved on.
  */
+/**
+ * Proof-file bodies stored in Postgres (the default driver).
+ *
+ * Separate from `proof_files`, which holds the per-record metadata: this
+ * table is addressed purely by storage key so the ProofStorage driver
+ * stays self-contained and swappable for S3 without touching ingest.
+ *
+ * Sizing is bounded upstream — the CLI truncates any proof file over 1 MB
+ * (MAX_PROOF_FILE_BYTES) and the ingest route rejects bodies over 4 MB —
+ * so these rows stay small and Postgres is a perfectly good blob store at
+ * this scale. It also removes a whole vendor from the deploy.
+ */
+export const proofBlobs = pgTable("proof_blobs", {
+  key: text("key").primaryKey(), // {userId}/{repoSlug}/{recordId}/{name}
+  content: text("content").notNull(),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const repoConfigs = pgTable("repo_configs", {
   repoPk: uuid("repo_pk")
     .primaryKey()

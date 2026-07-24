@@ -51,30 +51,143 @@ export class LocalDirStorage implements ProofStorage {
 }
 
 /**
- * Cloudflare R2 via the S3 API. The SDK is dynamic-imported so the local
- * driver (dev/tests) never loads it. `forcePathStyle` defaults on so the
- * same adapter works against R2 and against MinIO in tests.
+ * Proof files in Postgres — the default driver.
+ *
+ * Chosen over object storage because it removes an entire vendor from the
+ * deploy: with Supabase (or any Postgres) already required for records,
+ * blobs need no second service, no second set of credentials, and no
+ * public-bucket footgun. The size ceiling is enforced upstream (the CLI
+ * truncates at 1 MB per file, ingest rejects bodies over 4 MB), so rows
+ * stay small.
+ *
+ * put() returns url:null like every other driver — proof content reaches
+ * the browser only through the authed proxy route.
  */
-export class R2Storage implements ProofStorage {
-  private clientPromise?: Promise<
-    import("@aws-sdk/client-s3").S3Client
-  >;
+export class PostgresStorage implements ProofStorage {
+  async put(key: string, body: string): Promise<{ url: string | null }> {
+    const safe = safeKey(key);
+    const { db } = await import("@/db");
+    const { proofBlobs } = await import("@/db/schema");
+    const values = {
+      content: body,
+      sizeBytes: Buffer.byteLength(body, "utf8"),
+      updatedAt: new Date(),
+    };
+    await db
+      .insert(proofBlobs)
+      .values({ key: safe, ...values })
+      .onConflictDoUpdate({ target: proofBlobs.key, set: values });
+    return { url: null };
+  }
 
-  constructor(private bucket: string = process.env.R2_BUCKET ?? "") {
-    if (!this.bucket) throw new Error("R2_BUCKET is not set");
+  async get(key: string): Promise<string | null> {
+    try {
+      const safe = safeKey(key);
+      const { db } = await import("@/db");
+      const { proofBlobs } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select({ content: proofBlobs.content })
+        .from(proofBlobs)
+        .where(eq(proofBlobs.key, safe))
+        .limit(1);
+      return row?.content ?? null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Any S3-compatible object store — Supabase Storage, Cloudflare R2, MinIO.
+ *
+ * Kept because object storage is the right call at volume, but it is no
+ * longer the default. The SDK is dynamic-imported so the other drivers
+ * never load it, and `forcePathStyle` defaults on because Supabase
+ * Storage and MinIO both require it (R2 tolerates it).
+ *
+ * Config is read from STORAGE_* / SUPABASE_STORAGE_* / R2_* — see
+ * resolveS3Config. The R2_* names are kept working so an existing
+ * deployment keeps its environment.
+ */
+export interface S3Config {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  forcePathStyle: boolean;
+}
+
+const env = (...names: string[]): string | undefined => {
+  for (const n of names) {
+    const v = process.env[n];
+    if (v) return v;
+  }
+  return undefined;
+};
+
+/**
+ * Resolve S3 settings from whichever vendor's variables are present.
+ * Supabase exposes its S3 endpoint at <project>/storage/v1/s3, which we
+ * derive from SUPABASE_URL so only the keys need setting by hand.
+ */
+export function resolveS3Config(): S3Config | null {
+  const supabaseUrl = env("SUPABASE_URL");
+  const derivedSupabaseEndpoint = supabaseUrl
+    ? `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/s3`
+    : undefined;
+
+  const endpoint = env("STORAGE_ENDPOINT", "R2_ENDPOINT") ?? derivedSupabaseEndpoint;
+  const bucket = env("STORAGE_BUCKET", "R2_BUCKET", "SUPABASE_STORAGE_BUCKET");
+  if (!endpoint || !bucket) return null;
+
+  return {
+    endpoint,
+    bucket,
+    region: env("STORAGE_REGION", "R2_REGION", "SUPABASE_REGION") ?? "auto",
+    accessKeyId:
+      env("STORAGE_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID", "SUPABASE_STORAGE_KEY_ID") ?? "",
+    secretAccessKey:
+      env(
+        "STORAGE_SECRET_ACCESS_KEY",
+        "R2_SECRET_ACCESS_KEY",
+        "SUPABASE_STORAGE_ACCESS_KEY",
+      ) ?? "",
+    forcePathStyle:
+      env("STORAGE_FORCE_PATH_STYLE", "R2_FORCE_PATH_STYLE") !== "false",
+  };
+}
+
+export class S3Storage implements ProofStorage {
+  private clientPromise?: Promise<import("@aws-sdk/client-s3").S3Client>;
+  private config: S3Config;
+
+  constructor(config: S3Config | null = resolveS3Config()) {
+    if (!config) {
+      throw new Error(
+        "S3 storage is not configured (need an endpoint + bucket, or SUPABASE_URL + bucket)",
+      );
+    }
+    this.config = config;
+  }
+
+  private get bucket(): string {
+    return this.config.bucket;
   }
 
   private client() {
     if (!this.clientPromise) {
+      const c = this.config;
       this.clientPromise = import("@aws-sdk/client-s3").then(
         ({ S3Client }) =>
           new S3Client({
-            region: process.env.R2_REGION ?? "auto",
-            endpoint: process.env.R2_ENDPOINT,
-            forcePathStyle: process.env.R2_FORCE_PATH_STYLE !== "false",
+            region: c.region,
+            endpoint: c.endpoint,
+            forcePathStyle: c.forcePathStyle,
             credentials: {
-              accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
-              secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+              accessKeyId: c.accessKeyId,
+              secretAccessKey: c.secretAccessKey,
             },
           }),
       );
@@ -116,11 +229,28 @@ export class R2Storage implements ProofStorage {
   }
 }
 
+/** Back-compat alias — the driver is vendor-neutral now. */
+export { S3Storage as R2Storage };
+
+/**
+ * Driver selection.
+ *
+ * Postgres is the DEFAULT: it needs no second vendor, and it fixes a real
+ * deployment trap in the previous fallback — LocalDirStorage on a
+ * serverless host writes to an ephemeral filesystem, so proof files would
+ * silently disappear between requests with no error anywhere.
+ *
+ * BLOB_DRIVER forces a driver explicitly ("local" | "postgres" | "s3").
+ */
 export function getStorage(): ProofStorage {
-  if (process.env.BLOB_DRIVER === "local") return new LocalDirStorage();
-  // R2 in production (endpoint + bucket configured); local otherwise.
-  if (process.env.R2_ENDPOINT && process.env.R2_BUCKET) {
-    return new R2Storage();
-  }
+  const driver = process.env.BLOB_DRIVER;
+  if (driver === "local") return new LocalDirStorage();
+  if (driver === "postgres") return new PostgresStorage();
+  if (driver === "s3") return new S3Storage();
+
+  // Object storage only when it is actually configured...
+  if (resolveS3Config()) return new S3Storage();
+  // ...otherwise Postgres, which is always present for this app.
+  if (process.env.DATABASE_URL) return new PostgresStorage();
   return new LocalDirStorage();
 }
