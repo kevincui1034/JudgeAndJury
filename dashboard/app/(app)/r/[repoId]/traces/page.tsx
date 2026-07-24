@@ -36,7 +36,7 @@ function Pill({
       className={cx(
         "rounded-full border px-3 py-1 text-[12px] transition-colors",
         active
-          ? "border-[rgb(245_184_61/0.4)] bg-[rgb(245_184_61/0.12)] text-amber-ink"
+          ? "border-amber/40 bg-amber/12 text-amber-ink"
           : "border-glass-border text-body hover:text-ink",
       )}
     >
@@ -125,7 +125,7 @@ export default async function TracesPage({
               <Link
                 key={t.pk}
                 href={`${base}/${t.recordId}`}
-                className="flex items-center gap-3 border-t border-line/70 px-5 py-3 transition-colors first:border-t-0 hover:bg-white/[0.025]"
+                className="flex items-center gap-3 border-t border-line/70 px-5 py-3 transition-colors first:border-t-0 hover:bg-tint"
               >
                 <Mono className="w-16 shrink-0 text-body">{t.recordId}</Mono>
                 <VerdictBadge passed={t.gatePassed} />

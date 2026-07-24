@@ -44,7 +44,7 @@ export default async function ReposPage() {
               <Link
                 key={r.id}
                 href={`/r/${r.id}`}
-                className="flex items-center gap-4 border-t border-line/70 px-5 py-3.5 transition-colors first:border-t-0 hover:bg-white/[0.025]"
+                className="flex items-center gap-4 border-t border-line/70 px-5 py-3.5 transition-colors first:border-t-0 hover:bg-tint"
               >
                 <div className="min-w-0 flex-1">
                   <Mono className="text-[13px] text-ink">{r.repoSlug}</Mono>

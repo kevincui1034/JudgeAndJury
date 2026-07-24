@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* ————— Proofjury dashboard: the night world —————
+/* ————— Proofjury dashboard: two worlds —————
    Semantic token NAMES are inherited from the original dashboard so ported
-   query and badge logic keeps its meaning. What is new is the glass layer.
+   query and badge logic keeps its meaning.
 
    The one rule everything else follows: COLOR IS A VERDICT, NEVER
    DECORATION.
@@ -13,9 +13,119 @@
      violet  → memory, recall, priors
      faint   → inert, suppressed, below the noise floor
    A reviewer should be able to read a verdict from across the room without
-   reading a word. */
+   reading a word.
 
+   There are two worlds: `day` (the default) and `night`. Every component
+   reads TOKENS, never literals, so one attribute on <html> repaints the
+   entire app. Two rules keep that true:
+
+     1. Every token alias below lives in `@theme inline`. A bare `@theme`
+        copies the literal VALUE into the generated utility at build time,
+        freezing it to whichever world was declared first — some colors
+        switch on toggle and some don't, with no error anywhere.
+     2. Nested surfaces INVERT between worlds. In night a nested panel is
+        LIGHTER than its parent (--flat-fill is a white wash); in day it must
+        be DARKER (a white card inside a white card is invisible).
+
+   The two worlds are not recolors of each other. In night, depth comes from
+   frosted glass over an ambient wash. In day, blur is off entirely — over
+   near-white it renders as a grey smear and burns GPU on every panel — and
+   depth comes from layered shadows and hairline borders instead. */
+
+/* Tailwind v4's built-in `dark:` is prefers-color-scheme. Remap it to the
+   world attribute, or shadcn/ui components (which use dark: heavily) would
+   follow the OS while everything else follows data-world: correct on a
+   dark-mode laptop, broken on the projector. */
+@custom-variant dark (&:where([data-world="night"], [data-world="night"] *));
+@custom-variant night (&:where([data-world="night"], [data-world="night"] *));
+@custom-variant day (&:where([data-world="day"], [data-world="day"] *));
+
+/* ————— WORLD: day —————
+   Bound to :root as well, so it is what renders when the attribute is
+   missing entirely (pre-hydration, JS off). [data-world="night"] below has
+   higher specificity and still wins whenever it is present. */
 :root,
+[data-world="day"] {
+  /* surfaces — cool near-whites */
+  --surface: #f6f7fa;
+  --surface-2: #ffffff; /* raised */
+  --surface-3: #eef0f5; /* inset */
+
+  /* type */
+  --ink: #0d1117;
+  --body: #4c5665;
+  --faint: #7d8797;
+
+  /* structure */
+  --line: #e7eaf0;
+  --line-2: #d2d8e2;
+
+  /* the judge / brand — the -ink variant is TEXT ONLY.
+     #f0a91f on white is 1.9:1 and unreadable at 11px; #8a5808 is 6.9:1.
+     Fills, dots and chart strokes keep the bright value. */
+  --amber: #f0a91f;
+  --amber-ink: #8a5808;
+  --amber-deep: #d99414;
+
+  /* verdicts — darkened until they clear 4.5:1 on white, because they are
+     rendered as text as often as they are rendered as fills */
+  --verdict-red: #c8362f;
+  --verdict-red-deep: #a92620;
+  --verdict-green: #0f9d58;
+
+  /* vendor-neutral agent glyphs */
+  --bot-teal: #0d8f83;
+  --bot-violet: #6b46e0;
+  --bot-rose: #d1305a;
+
+  /* ── panel layer — elevation, not glass ── */
+  --glass-fill: #ffffff;
+  --glass-fill-strong: #ffffff;
+  --glass-border: #e7eaf0;
+  --glass-highlight: #c3cbd8; /* hover: borders DARKEN in day */
+  --glass-shadow:
+    0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px -12px rgb(16 24 40 / 0.1);
+  --overlay-shadow: 0 12px 32px -8px rgb(16 24 40 / 0.16);
+  --panel-backdrop: none;
+  --overlay-backdrop: none;
+  --flat-fill: #f6f7f9; /* nested surface — DARKER than its white parent */
+
+  /* app pane — in day the pane is the page, not an inset well */
+  --pane-bg: transparent;
+  --pane-border: #e7eaf0;
+  --pane-shadow: 0 1px 3px rgb(16 24 40 / 0.04);
+
+  /* page background */
+  --body-bg: #f4f5f8;
+  --body-wash:
+    radial-gradient(60rem 36rem at 78% -12%, rgb(240 169 31 / 0.1), transparent 62%),
+    radial-gradient(46rem 30rem at 0% 6%, rgb(107 70 224 / 0.07), transparent 58%),
+    radial-gradient(40rem 28rem at 50% 108%, rgb(13 143 131 / 0.05), transparent 60%);
+
+  /* a faint tint of the FOREGROUND over the surface — inverts per world */
+  --tint: rgb(13 17 23 / 0.035);
+  --tint-strong: rgb(13 17 23 / 0.06);
+
+  /* canvas dot-grid */
+  --grid-line: rgb(13 17 23 / 0.055);
+  --grid-size: 28px;
+  /* The tile grid sits UNDER content on a white card; at the dot-grid's
+     weight it reads as graph paper. It is texture, not structure. */
+  --tile-line: rgb(13 17 23 / 0.022);
+
+  /* glows — on white a diffuse halo vanishes, so day trades it for a
+     stronger ring */
+  --glow-amber:
+    0 0 0 1px rgb(240 169 31 / 0.45), 0 4px 16px -6px rgb(240 169 31 / 0.25);
+  --glow-red:
+    0 0 0 1px rgb(200 54 47 / 0.35), 0 4px 16px -6px rgb(200 54 47 / 0.2);
+  --glow-green:
+    0 0 0 1px rgb(15 157 88 / 0.35), 0 4px 16px -6px rgb(15 157 88 / 0.2);
+
+  --select-bg: rgb(240 169 31 / 0.3);
+}
+
+/* ————— WORLD: night ————— */
 [data-world="night"] {
   /* surfaces — cool, desaturated, near-black with a blue cast */
   --surface: #080b12;
@@ -46,25 +156,55 @@
   --bot-violet: #a78bfa;
   --bot-rose: #fb7185;
 
-  /* ── glass layer ── */
+  /* ── panel layer — glass ── */
   --glass-fill: rgb(255 255 255 / 0.055);
   --glass-fill-strong: rgb(255 255 255 / 0.085);
   --glass-border: rgb(255 255 255 / 0.11);
-  --glass-highlight: rgb(255 255 255 / 0.2);
+  --glass-highlight: rgb(255 255 255 / 0.2); /* hover: borders LIGHTEN */
   --glass-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.7);
-  --blur-panel: 24px;
-  --blur-overlay: 40px;
+  --overlay-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.7);
+  --panel-backdrop: blur(24px) saturate(140%);
+  --overlay-backdrop: blur(40px) saturate(150%);
+  --flat-fill: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.055),
+    rgb(255 255 255 / 0.022)
+  );
 
-  /* canvas dot-grid */
+  /* the app sits in a darker inset pane so the ambient wash reads as light
+     AROUND the glass */
+  --pane-bg: linear-gradient(180deg, rgb(8 11 18 / 0.86), rgb(8 11 18 / 0.94));
+  --pane-border: rgb(255 255 255 / 0.06);
+  --pane-shadow:
+    0 40px 120px -24px rgb(0 0 0 / 0.75), inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+
+  /* the wash is what makes glass read as glass: without something bright
+     behind a panel, backdrop-filter has nothing to blur */
+  --body-bg: #10141d;
+  --body-wash:
+    radial-gradient(64rem 38rem at 76% -10%, rgb(150 172 232 / 0.4), transparent 60%),
+    radial-gradient(48rem 32rem at 2% 4%, rgb(108 140 214 / 0.24), transparent 56%),
+    radial-gradient(42rem 30rem at 46% 112%, rgb(158 136 226 / 0.22), transparent 58%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 34%);
+
+  --tint: rgb(255 255 255 / 0.04);
+  --tint-strong: rgb(255 255 255 / 0.08);
+
   --grid-line: rgb(255 255 255 / 0.035);
   --grid-size: 28px;
+  --tile-line: rgb(255 255 255 / 0.035);
 
-  /* glows — used sparingly, only to mark a verdict */
-  --glow-amber: 0 0 0 1px rgb(245 184 61 / 0.28), 0 8px 32px -8px rgb(245 184 61 / 0.25);
-  --glow-red: 0 0 0 1px rgb(242 113 106 / 0.3), 0 8px 32px -8px rgb(242 113 106 / 0.28);
-  --glow-green: 0 0 0 1px rgb(74 222 128 / 0.28), 0 8px 32px -8px rgb(74 222 128 / 0.22);
+  --glow-amber:
+    0 0 0 1px rgb(245 184 61 / 0.28), 0 8px 32px -8px rgb(245 184 61 / 0.25);
+  --glow-red:
+    0 0 0 1px rgb(242 113 106 / 0.3), 0 8px 32px -8px rgb(242 113 106 / 0.28);
+  --glow-green:
+    0 0 0 1px rgb(74 222 128 / 0.28), 0 8px 32px -8px rgb(74 222 128 / 0.22);
+
+  --select-bg: rgb(245 184 61 / 0.28);
 }
 
+/* Must stay `@theme inline` — see rule 1 at the top of this file. */
 @theme inline {
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -85,72 +225,85 @@
   --color-bot-rose: var(--bot-rose);
   --color-glass-border: var(--glass-border);
 
+  /* A tint of the foreground over the surface. Replaces the `bg-white/[0.0x]`
+     literals, which read as nothing on a light background. */
+  --color-tint: var(--tint);
+  --color-tint-strong: var(--tint-strong);
+
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
   --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+
+  /* ── shadcn/ui vocabulary, aliased onto proofjury tokens ──
+     This is why the five Radix components need zero edits: one data-world
+     switch drives both naming systems. Deliberately NOT redefining
+     --radius-* — those are Tailwind built-ins, and overriding them would
+     silently retune every rounded-* across all twelve pages at once. */
+  --color-background: var(--surface);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface-2);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface-2);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--amber);
+  --color-primary-foreground: var(--surface-3);
+  --color-secondary: var(--surface-3);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--surface-3);
+  --color-muted-foreground: var(--faint);
+  --color-accent: var(--surface-3);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--verdict-red);
+  --color-border: var(--line);
+  --color-input: var(--line-2);
+  --color-ring: var(--amber);
 }
 
-/* ————— page shell —————
-   The ambient wash is what makes the glass read as glass: without
-   something behind a panel, backdrop-filter has nothing to blur. */
+/* ————— page shell ————— */
 body {
-  background-color: #10141d;
-  background-image:
-    radial-gradient(64rem 38rem at 76% -10%, rgb(150 172 232 / 0.4), transparent 60%),
-    radial-gradient(48rem 32rem at 2% 4%, rgb(108 140 214 / 0.24), transparent 56%),
-    radial-gradient(42rem 30rem at 46% 112%, rgb(158 136 226 / 0.22), transparent 58%),
-    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 34%);
+  background-color: var(--body-bg);
+  background-image: var(--body-wash);
   background-attachment: fixed;
   min-height: 100dvh;
 }
 
-/* The app sits in a darker inset pane so the ambient wash reads as light
-   AROUND the glass — without something bright behind them, backdrop-filter
-   has nothing to blur and every panel just looks like flat grey. */
 .app-pane {
-  background: linear-gradient(
-    180deg,
-    rgb(8 11 18 / 0.86),
-    rgb(8 11 18 / 0.94)
-  );
-  border: 1px solid rgb(255 255 255 / 0.06);
-  box-shadow:
-    0 40px 120px -24px rgb(0 0 0 / 0.75),
-    inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+  background: var(--pane-bg);
+  border: 1px solid var(--pane-border);
+  box-shadow: var(--pane-shadow);
 }
 
-/* ————— glass —————
+/* ————— panels —————
    PERFORMANCE: backdrop-filter belongs on CONTAINERS only (nav rail,
    overlay cards, drawer, header). Node cards on the trace canvas use
    .glass-flat — a 25-node canvas with per-card blur drops frames on a
-   projector, which is exactly where this gets demoed. */
+   projector, which is exactly where this gets demoed. In day, --panel-backdrop
+   is `none` and this all costs nothing. */
 .glass {
   background: var(--glass-fill);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--blur-panel)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--blur-panel)) saturate(140%);
+  backdrop-filter: var(--panel-backdrop);
+  -webkit-backdrop-filter: var(--panel-backdrop);
   box-shadow: var(--glass-shadow);
 }
 
 .glass-overlay {
   background: var(--glass-fill-strong);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--blur-overlay)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--blur-overlay)) saturate(150%);
-  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--overlay-backdrop);
+  -webkit-backdrop-filter: var(--overlay-backdrop);
+  box-shadow: var(--overlay-shadow);
 }
 
-/* No blur — for anything that repeats many times on screen. */
+/* No blur — for anything that repeats many times on screen. Note this goes
+   DARKER than its parent in day and LIGHTER in night; see rule 2 up top. */
 .glass-flat {
-  background: linear-gradient(
-    180deg,
-    rgb(255 255 255 / 0.055),
-    rgb(255 255 255 / 0.022)
-  );
+  background: var(--flat-fill);
   border: 1px solid var(--glass-border);
 }
 
-/* A 1px top highlight sells the "pane of glass" edge. */
+/* A 1px top highlight sells the "pane of glass" edge. It only exists in
+   night — see the day override below. */
 .glass-edge {
   position: relative;
 }
@@ -169,22 +322,34 @@ body {
   pointer-events: none;
 }
 
+/* Removed, not made transparent: a transparent 1px band still forces a
+   paint layer on every panel. */
+[data-world="day"] .glass-edge::before {
+  display: none;
+}
+
 .dot-grid {
   background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
   background-size: var(--grid-size) var(--grid-size);
 }
 
-/* Subtle inner grid used behind stat-tile sparklines (reference #1). */
+/* Subtle inner grid used behind stat-tile sparklines. */
 .tile-grid {
   background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    linear-gradient(var(--tile-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tile-line) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 
-.verdict-pass { box-shadow: var(--glow-green); }
-.verdict-block { box-shadow: var(--glow-red); }
-.verdict-advice { box-shadow: var(--glow-amber); }
+.verdict-pass {
+  box-shadow: var(--glow-green);
+}
+.verdict-block {
+  box-shadow: var(--glow-red);
+}
+.verdict-advice {
+  box-shadow: var(--glow-amber);
+}
 
 /* Numerals must not jitter while live-polling updates them. */
 .tnum {
@@ -193,7 +358,7 @@ body {
 }
 
 ::selection {
-  background: rgb(245 184 61 / 0.28);
+  background: var(--select-bg);
   color: var(--ink);
 }
 

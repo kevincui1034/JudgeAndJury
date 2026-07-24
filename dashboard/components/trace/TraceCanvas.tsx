@@ -23,14 +23,16 @@ import {
   type TraceNode,
 } from "@/components/trace/traceLayout";
 
+/* color-mix so one source of truth resolves per world with zero JS — these
+   are inline styles, so a Tailwind opacity modifier is not available. */
 const TONE_BORDER: Record<PortTone, string> = {
-  agent: "rgb(45 212 191 / 0.45)",
-  decides: "rgb(242 113 106 / 0.55)",
-  context: "rgb(245 184 61 / 0.4)",
-  memory: "rgb(167 139 250 / 0.45)",
-  pass: "rgb(74 222 128 / 0.4)",
-  block: "rgb(242 113 106 / 0.55)",
-  inert: "rgb(255 255 255 / 0.08)",
+  agent: "color-mix(in oklab, var(--bot-teal) 45%, transparent)",
+  decides: "color-mix(in oklab, var(--verdict-red) 55%, transparent)",
+  context: "color-mix(in oklab, var(--amber) 45%, transparent)",
+  memory: "color-mix(in oklab, var(--bot-violet) 45%, transparent)",
+  pass: "color-mix(in oklab, var(--verdict-green) 45%, transparent)",
+  block: "color-mix(in oklab, var(--verdict-red) 55%, transparent)",
+  inert: "var(--line-2)",
 };
 
 const TONE_DOT: Record<PortTone, string> = {

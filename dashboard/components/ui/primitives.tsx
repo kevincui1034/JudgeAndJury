@@ -109,8 +109,8 @@ export function VerdictBadge({ passed }: { passed: boolean }) {
       className={cx(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
         passed
-          ? "bg-[rgb(74_222_128/0.12)] text-verdict-green"
-          : "bg-[rgb(242_113_106/0.12)] text-verdict-red",
+          ? "bg-verdict-green/12 text-verdict-green"
+          : "bg-verdict-red/12 text-verdict-red",
       )}
     >
       <span
@@ -127,20 +127,20 @@ export function VerdictBadge({ passed }: { passed: boolean }) {
 
 export function ClassChip({ name }: { name: string }) {
   return (
-    <span className="inline-flex rounded-md border border-[rgb(242_113_106/0.22)] bg-[rgb(242_113_106/0.08)] px-1.5 py-0.5 font-mono text-[11px] text-verdict-red">
+    <span className="inline-flex rounded-md border border-verdict-red/20 bg-verdict-red/8 px-1.5 py-0.5 font-mono text-[11px] text-verdict-red">
       {name}
     </span>
   );
 }
 
 const TONES = {
-  neutral: "border-line-2 bg-white/[0.04] text-body",
-  amber: "border-[rgb(245_184_61/0.28)] bg-[rgb(245_184_61/0.1)] text-amber-ink",
-  green: "border-[rgb(74_222_128/0.26)] bg-[rgb(74_222_128/0.1)] text-verdict-green",
-  red: "border-[rgb(242_113_106/0.26)] bg-[rgb(242_113_106/0.1)] text-verdict-red",
-  violet: "border-[rgb(167_139_250/0.28)] bg-[rgb(167_139_250/0.1)] text-bot-violet",
-  teal: "border-[rgb(45_212_191/0.28)] bg-[rgb(45_212_191/0.1)] text-bot-teal",
-  faint: "border-line bg-white/[0.02] text-faint",
+  neutral: "border-line-2 bg-tint text-body",
+  amber: "border-amber/30 bg-amber/10 text-amber-ink",
+  green: "border-verdict-green/26 bg-verdict-green/10 text-verdict-green",
+  red: "border-verdict-red/26 bg-verdict-red/10 text-verdict-red",
+  violet: "border-bot-violet/28 bg-bot-violet/10 text-bot-violet",
+  teal: "border-bot-teal/28 bg-bot-teal/10 text-bot-teal",
+  faint: "border-line bg-tint/50 text-faint",
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -312,7 +312,7 @@ export function RankedRow({
       <span className="tnum w-4 shrink-0 text-[11px] text-faint">{rank}</span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] text-body">{label}</div>
-        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.05]">
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-tint-strong">
           <div
             className="h-full rounded-full"
             style={{

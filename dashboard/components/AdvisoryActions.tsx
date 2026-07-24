@@ -11,9 +11,9 @@ import { cx } from "@/components/ui/primitives";
 const INITIAL: ActionState = { error: null };
 
 const TONES = {
-  amber: "border-[rgb(245_184_61/0.35)] text-amber-ink hover:bg-[rgb(245_184_61/0.12)]",
-  green: "border-[rgb(74_222_128/0.3)] text-verdict-green hover:bg-[rgb(74_222_128/0.12)]",
-  red: "border-[rgb(242_113_106/0.3)] text-verdict-red hover:bg-[rgb(242_113_106/0.12)]",
+  amber: "border-amber/35 text-amber-ink hover:bg-amber/12",
+  green: "border-verdict-green/30 text-verdict-green hover:bg-verdict-green/12",
+  red: "border-verdict-red/30 text-verdict-red hover:bg-verdict-red/12",
 } as const;
 
 /** One form per action — the submit button carries the action, so no

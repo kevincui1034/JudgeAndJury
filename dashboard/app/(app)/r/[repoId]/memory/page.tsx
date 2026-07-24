@@ -120,7 +120,7 @@ export default async function MemoryPage({
                 <Link
                   key={r.recordId}
                   href={`/r/${repoId}/traces/${r.recordId}`}
-                  className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 transition-colors first:border-t-0 hover:bg-white/[0.025]"
+                  className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 transition-colors first:border-t-0 hover:bg-tint"
                 >
                   <Mono className="text-body">{r.recordId}</Mono>
                   <span className="text-faint">↩</span>

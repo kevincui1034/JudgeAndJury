@@ -214,7 +214,7 @@ export default async function OverviewPage({
               </div>
               <div className="h-10 w-px bg-line" />
               <div className="flex-1">
-                <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-tint-strong">
                   <div
                     className="bg-verdict-green"
                     style={{ width: `${(stats.passed / stats.total) * 100}%` }}
@@ -339,7 +339,7 @@ export default async function OverviewPage({
             <Link
               key={t.recordId}
               href={`${base}/traces/${t.recordId}`}
-              className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 transition-colors first:border-t-0 hover:bg-white/[0.025]"
+              className="flex items-center gap-3 border-t border-line/70 px-5 py-2.5 transition-colors first:border-t-0 hover:bg-tint"
             >
               <Mono className="w-16 shrink-0 text-body">{t.recordId}</Mono>
               <VerdictBadge passed={t.gatePassed} />

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,11 +33,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-world="night">
+    // suppressHydrationWarning: next-themes stamps data-world onto <html>
+    // before hydration, so the server and client markup differ by design.
+    // This layout stays a server component — children pass through as a
+    // prop, so the RSC subtree below is untouched.
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} bg-surface text-body font-sans antialiased`}
       >
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

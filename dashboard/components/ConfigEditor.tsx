@@ -12,7 +12,7 @@ import { Badge, cx } from "@/components/ui/primitives";
 const INITIAL: ConfigState = { error: null, queued: null };
 
 const INPUT =
-  "rounded-lg border border-glass-border bg-white/[0.03] px-2.5 py-1 text-[12.5px] text-ink focus:border-amber focus:outline-none";
+  "rounded-lg border border-line-2 bg-surface-2 px-2.5 py-1 text-[12.5px] text-ink transition-colors focus:border-amber focus:ring-2 focus:ring-amber/25 focus:outline-none";
 
 export function ConfigEditor({
   spec,
@@ -47,7 +47,7 @@ export function ConfigEditor({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg border border-[rgb(245_184_61/0.35)] px-3 py-1.5 text-[12px] text-amber-ink transition-colors hover:bg-[rgb(245_184_61/0.12)] disabled:opacity-40"
+          className="rounded-lg border border-amber/35 px-3 py-1.5 text-[12px] text-amber-ink transition-colors hover:bg-amber/12 disabled:opacity-40"
         >
           {pending ? "queueing…" : "Queue change"}
         </button>

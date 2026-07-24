@@ -63,7 +63,7 @@ export default async function DevicePage({
                 placeholder="MKGH-P4TN"
                 autoComplete="off"
                 spellCheck={false}
-                className="rounded-xl border border-glass-border bg-white/[0.03] px-4 py-2.5 text-center font-mono text-[17px] tracking-[0.2em] text-ink placeholder:text-faint focus:border-amber focus:outline-none"
+                className="rounded-xl border border-line-2 bg-surface-2 px-4 py-2.5 text-center font-mono text-[17px] tracking-[0.2em] text-ink placeholder:text-faint focus:border-amber focus:outline-none"
               />
               <div className="flex gap-2.5">
                 <button

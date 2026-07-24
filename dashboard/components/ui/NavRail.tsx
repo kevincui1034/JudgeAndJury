@@ -34,7 +34,7 @@ export function NavRail({
       <Link href="/repos" className="mb-5 flex items-center gap-2.5 px-5">
         <span
           aria-hidden
-          className="grid size-7 place-items-center rounded-lg border border-[rgb(245_184_61/0.3)] bg-[rgb(245_184_61/0.12)] text-[13px] text-amber-ink"
+          className="grid size-7 place-items-center rounded-lg border border-amber/30 bg-amber/12 text-[13px] text-amber-ink"
         >
           §
         </span>
