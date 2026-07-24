@@ -28,6 +28,7 @@ from ._openai_compat import _FENCE_RE
 from .anthropic_direct import AnthropicJudge
 from .openai_direct import OpenAIJudge
 from .openrouter import OpenRouterJudge
+from .pioneer import PioneerJudge
 
 KINDS = ("discovery", "adjudication")
 TIERS = (4, 5)
@@ -246,10 +247,15 @@ class AnthropicAdvisoryJudge(_ChatAdvisoryMixin, AnthropicJudge):
     pass
 
 
+class PioneerAdvisoryJudge(_ChatAdvisoryMixin, PioneerJudge):
+    pass
+
+
 _ADAPTERS = {
     "openrouter": OpenRouterAdvisoryJudge,
     "anthropic": AnthropicAdvisoryJudge,
     "openai": OpenAIAdvisoryJudge,
+    "pioneer": PioneerAdvisoryJudge,
 }
 
 

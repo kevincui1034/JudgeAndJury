@@ -22,10 +22,13 @@ PROVIDER_ENV_KEYS = {
     "openrouter": "OPENROUTER_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "pioneer": "PIONEER_API_KEY",
 }
 
-#: Auto-detect order when no provider is named explicitly.
-_AUTODETECT_ORDER = ("openrouter", "anthropic", "openai")
+#: Auto-detect order when no provider is named explicitly. Pioneer sits
+#: LAST so adding a PIONEER_API_KEY to the environment never silently
+#: re-points an existing user's judge at a different provider.
+_AUTODETECT_ORDER = ("openrouter", "anthropic", "openai", "pioneer")
 
 
 def _env(env: Mapping[str, str] | None) -> Mapping[str, str]:

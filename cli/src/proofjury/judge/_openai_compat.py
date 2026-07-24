@@ -133,6 +133,15 @@ class ChatCompletionsJudge:
     def _extract_cost(self, data: dict) -> float:
         return 0.0
 
+    def _label_model(self, model_id: str) -> str:
+        """Provenance label for the returned model id.
+
+        Identity by default. A provider that routes to models it does not
+        own (Pioneer) namespaces the id here so the record and the ledger
+        both say WHICH provider served the call.
+        """
+        return model_id
+
     # -- shared request path ---------------------------------------------
     def _chat(self, system: str, user: str) -> tuple[str, str, float]:
         """One chat/completions round-trip → ``(content, model_id, cost)``.
@@ -155,7 +164,7 @@ class ChatCompletionsJudge:
             data = response.json()
         content = data["choices"][0]["message"]["content"]
         cost = self._extract_cost(data)
-        model_id = data.get("model") or self.model
+        model_id = self._label_model(data.get("model") or self.model)
         append_ledger(self.root, model_id, cost)
         return content, model_id, cost
 

@@ -24,11 +24,13 @@ from .deterministic import DeterministicJudge  # noqa: F401
 from .mock import MockJudge  # noqa: F401
 from .openai_direct import OpenAIJudge  # noqa: F401
 from .openrouter import DEFAULT_MODEL, OpenRouterJudge  # noqa: F401
+from .pioneer import PioneerJudge  # noqa: F401
 
 _ADAPTERS = {
     "openrouter": OpenRouterJudge,
     "anthropic": AnthropicJudge,
     "openai": OpenAIJudge,
+    "pioneer": PioneerJudge,
 }
 
 

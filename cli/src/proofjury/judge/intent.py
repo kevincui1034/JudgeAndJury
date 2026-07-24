@@ -27,6 +27,7 @@ from .advisory import AdvisoryFinding
 from .anthropic_direct import AnthropicJudge
 from .openai_direct import OpenAIJudge
 from .openrouter import OpenRouterJudge
+from .pioneer import PioneerJudge
 
 #: TAXONOMY.md intent categories (v0.3). Small on purpose — categories are
 #: graduation signatures, and a sprawling taxonomy never accumulates the
@@ -143,6 +144,7 @@ _ADAPTERS = {
     "openrouter": OpenRouterJudge,
     "anthropic": AnthropicJudge,
     "openai": OpenAIJudge,
+    "pioneer": PioneerJudge,
 }
 
 

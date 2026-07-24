@@ -77,7 +77,7 @@ app.add_typer(advisory_app, name="advisory")
 
 PASSTHROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
 RUN_KINDS = ("tests", "build", "lint", "typecheck")
-JUDGE_PROVIDERS = ("openrouter", "anthropic", "openai")
+JUDGE_PROVIDERS = ("openrouter", "anthropic", "openai", "pioneer")
 
 _SENTINEL_KEY = "proofjury_has_sentinel"
 
@@ -388,12 +388,19 @@ def _mask_key(key: str) -> str:
 def _verify_login(console: Console, provider: str, api_key: str, model: str | None) -> None:
     """Best-effort live check — never fails the command."""
     from .checks.base import CheckResult, Evidence
-    from .judge import AnthropicJudge, JudgeInput, OpenAIJudge, OpenRouterJudge
+    from .judge import (
+        AnthropicJudge,
+        JudgeInput,
+        OpenAIJudge,
+        OpenRouterJudge,
+        PioneerJudge,
+    )
 
     adapters = {
         "openrouter": OpenRouterJudge,
         "anthropic": AnthropicJudge,
         "openai": OpenAIJudge,
+        "pioneer": PioneerJudge,
     }
     judge = adapters[provider](api_key=api_key, model=model)
     probe = JudgeInput(
@@ -422,7 +429,9 @@ def _verify_login(console: Console, provider: str, api_key: str, model: str | No
 @app.command()
 def login(
     provider: str = typer.Option(
-        None, "--provider", help="openrouter | anthropic | openai (default openrouter)."
+        None,
+        "--provider",
+        help="openrouter | anthropic | openai | pioneer (default openrouter).",
     ),
     api_key: str = typer.Option(
         None, "--api-key", help="API key — skips the prompts; never echoed or logged."
@@ -444,7 +453,7 @@ def login(
 
     if provider is None and interactive:
         provider = typer.prompt(
-            "Provider (openrouter/anthropic/openai)", default="openrouter"
+            "Provider (openrouter/anthropic/openai/pioneer)", default="openrouter"
         )
     provider = (provider or "openrouter").strip().lower()
     if provider not in JUDGE_PROVIDERS:
