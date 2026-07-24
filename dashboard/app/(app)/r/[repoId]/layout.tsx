@@ -1,4 +1,5 @@
 import { NavRail } from "@/components/ui/NavRail";
+import { LiveDot } from "@/components/ui/LiveDot";
 import { requireRepo } from "@/lib/repo";
 
 export default async function RepoLayout({
@@ -50,7 +51,10 @@ export default async function RepoLayout({
             <p className="truncate font-mono text-[11px] text-body">
               {repo.repoSlug}
             </p>
-            <p className="mt-0.5 text-[10px] text-faint">connected repo</p>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[10px] text-faint">connected repo</span>
+              <LiveDot repoId={repo.id} />
+            </div>
           </div>
         }
       />
