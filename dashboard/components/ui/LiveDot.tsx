@@ -21,11 +21,14 @@ export function LiveDot({ repoId }: { repoId: string }) {
   const router = useRouter();
   const [flash, setFlash] = useState(false);
   const cursor = useRef<string | null>(null);
-  const lastChange = useRef(Date.now());
+  // Seeded in the effect, not at render: Date.now() during render is impure
+  // and makes the value depend on how often React happens to re-render.
+  const lastChange = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    lastChange.current ??= Date.now();
 
     async function tick() {
       if (cancelled) return;
@@ -47,7 +50,8 @@ export function LiveDot({ repoId }: { repoId: string }) {
           // correct, just not freshly revalidated.
         }
       }
-      const idle = Date.now() - lastChange.current > IDLE_BEFORE_SLOW_MS;
+      const idle =
+        Date.now() - (lastChange.current ?? Date.now()) > IDLE_BEFORE_SLOW_MS;
       timer = setTimeout(tick, idle ? SLOW_MS : FAST_MS);
     }
 
@@ -68,13 +72,21 @@ export function LiveDot({ repoId }: { repoId: string }) {
       title="Live — this page refreshes when new gate runs sync"
       className="flex items-center gap-1.5 text-[11px] text-faint"
     >
-      <span
-        aria-hidden
-        className={cx(
-          "size-1.5 rounded-full transition-colors",
-          flash ? "bg-verdict-green" : "bg-line-2",
+      <span className="relative flex size-1.5 shrink-0">
+        {flash && (
+          <span
+            aria-hidden
+            className="absolute inline-flex size-full animate-ping rounded-full bg-verdict-green opacity-75"
+          />
         )}
-      />
+        <span
+          aria-hidden
+          className={cx(
+            "relative inline-flex size-1.5 rounded-full transition-colors",
+            flash ? "bg-verdict-green" : "bg-line-2",
+          )}
+        />
+      </span>
       live
     </span>
   );

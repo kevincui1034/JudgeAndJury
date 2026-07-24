@@ -127,6 +127,126 @@ def test_pioneer_unknown_model_costs_zero_rather_than_guessing(tmp_path):
     assert judge.diagnose(_judge_input()).cost_usd == 0.0
 
 
+# --------------------------------------------------------------------------
+# router savings: what pioneer/auto saved, kept distinct from what it cost
+# --------------------------------------------------------------------------
+
+
+def _savings_block(baseline: str = "gpt-5.5", **rates) -> dict:
+    """The ``x_pioneer`` envelope, shaped as the live API returns it."""
+    return {
+        "inference_id": "2d259e9f-3d5b-4514-9b95-a36b767b8498",
+        "routed_model": "zai-org/GLM-5.2",
+        "savings": {
+            "baseline_model": baseline,
+            "routed_model": "zai-org/GLM-5.2",
+            "rate_diff_per_mtok": rates
+            or {"input": 3.5, "output": 25.5, "cache_read": 0.2, "cache_write": 3.5},
+        },
+    }
+
+
+def _ledger_line(tmp_path):
+    return json.loads(
+        (tmp_path / ".proofjury" / "ledger.jsonl").read_text().splitlines()[0]
+    )
+
+
+def _run(tmp_path, payload):
+    judge = PioneerJudge(
+        api_key="k",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)),
+        root=tmp_path / ".proofjury",
+    )
+    return judge.diagnose(_judge_input())
+
+
+def test_router_savings_are_recorded_without_inflating_cost(tmp_path):
+    """Pioneer reports a rate delta versus a frontier baseline, not a
+    price. It must land as a saving; the call's cost stays the honest 0.0
+    of an unpriced model."""
+    payload = _reply(
+        json.dumps({"diagnosis": "d", "fix_steps": []}),
+        model="zai-org/GLM-5.2",
+        prompt_tokens=1_000_000,
+        completion_tokens=1_000_000,
+    )
+    payload["x_pioneer"] = _savings_block()
+
+    output = _run(tmp_path, payload)
+    entry = _ledger_line(tmp_path)
+
+    # 1M prompt @ $3.5 + 1M completion @ $25.5 saved per 1M tokens.
+    assert entry["saved_usd"] == pytest.approx(29.0)
+    assert entry["saved_vs"] == "gpt-5.5"
+    # The saving is NOT a spend.
+    assert entry["cost_usd"] == 0.0
+    assert output.cost_usd == 0.0
+    assert entry["model"] == "pioneer/zai-org/GLM-5.2"
+
+
+def test_cached_prompt_tokens_are_not_counted_at_both_rates(tmp_path):
+    """``cached_tokens`` is a SUBSET of ``prompt_tokens`` in this wire
+    shape, so charging it the input rate too would overstate the saving."""
+    payload = _reply(
+        json.dumps({"diagnosis": "d", "fix_steps": []}),
+        prompt_tokens=1_000_000,
+        completion_tokens=0,
+        prompt_tokens_details={"cached_tokens": 400_000},
+    )
+    payload["x_pioneer"] = _savings_block(input=10.0, cache_read=1.0)
+
+    _run(tmp_path, payload)
+    # 600k uncached @ $10 + 400k cached @ $1 = $6.40, not $10.40.
+    assert _ledger_line(tmp_path)["saved_usd"] == pytest.approx(6.4)
+
+
+def test_a_response_without_the_savings_block_keeps_the_old_entry_shape(tmp_path):
+    """Every other provider — and Pioneer on a pinned model — must keep the
+    exact three-key ledger entry that existing readers parse."""
+    _run(tmp_path, _reply(json.dumps({"diagnosis": "d", "fix_steps": []})))
+    assert set(_ledger_line(tmp_path)) == {"ts", "model", "cost_usd"}
+
+
+def test_a_malformed_savings_block_is_dropped_not_raised(tmp_path):
+    """The block is untrusted upstream JSON; junk must degrade to 'no
+    savings recorded' rather than break a diagnosis."""
+    payload = _reply(json.dumps({"diagnosis": "d", "fix_steps": []}))
+    payload["x_pioneer"] = {"savings": {"rate_diff_per_mtok": "not-a-dict"}}
+
+    assert _run(tmp_path, payload).diagnosis == "d"
+    assert set(_ledger_line(tmp_path)) == {"ts", "model", "cost_usd"}
+
+
+def test_stats_aggregates_savings_separately_from_spend(tmp_path):
+    """`proofjury memory stats` must report the two as different numbers."""
+    from proofjury.memory.export import read_ledger
+
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text(
+        "\n".join(
+            json.dumps(entry)
+            for entry in [
+                {"ts": "t", "model": "pioneer/a", "cost_usd": 0.0, "saved_usd": 1.5,
+                 "saved_vs": "gpt-5.5"},
+                {"ts": "t", "model": "pioneer/a", "cost_usd": 0.0, "saved_usd": 0.5,
+                 "saved_vs": "gpt-5.5"},
+                {"ts": "t", "model": "openai/gpt-4o-mini", "cost_usd": 0.02},
+            ]
+        )
+        + "\n"
+    )
+    data = read_ledger(ledger_path)
+
+    assert data["calls"] == 3
+    assert data["total_cost_usd"] == pytest.approx(0.02)
+    assert data["total_saved_usd"] == pytest.approx(2.0)
+    assert data["saved_vs"] == {"gpt-5.5": 2}
+    assert data["by_model"]["pioneer/a"]["saved_usd"] == pytest.approx(2.0)
+    # A provider that reports no savings reads as 0.0, never as missing.
+    assert data["by_model"]["openai/gpt-4o-mini"]["saved_usd"] == 0.0
+
+
 def test_pioneer_default_model_is_the_router():
     """Pioneer/Auto dispatches each prompt to the best model for the job.
     The judge has three surfaces with very different cost profiles (cheap

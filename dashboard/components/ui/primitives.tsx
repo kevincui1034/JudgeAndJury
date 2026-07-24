@@ -3,6 +3,7 @@
  * stay RSC and `router.refresh()` can update them with zero client state.
  */
 import Link from "next/link";
+import { Check, X, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -30,23 +31,63 @@ export function PanelHeader({
   accent,
   right,
   hint,
+  icon: Icon,
 }: {
   title: string;
-  /** Second half of the title, rendered in the brand tint (reference #1). */
+  /** Second half of the title, rendered in the brand tint. */
   accent?: string;
   right?: ReactNode;
   hint?: string;
+  icon?: LucideIcon;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
-      <div className="min-w-0">
-        <h2 className="truncate text-[15px] font-medium text-ink">
-          {title}
-          {accent && <span className="text-amber-ink"> {accent}</span>}
-        </h2>
-        {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}
+      <div className="flex min-w-0 items-start gap-2.5">
+        {Icon && (
+          <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-tint text-faint">
+            <Icon className="size-3.5" />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h2 className="truncate text-[15px] font-medium text-ink">
+            {title}
+            {accent && <span className="text-amber-ink"> {accent}</span>}
+          </h2>
+          {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}
+        </div>
       </div>
       {right && <div className="flex shrink-0 items-center gap-2">{right}</div>}
+    </div>
+  );
+}
+
+/**
+ * The page title block. Ten pages hand-rolled the same markup; this is the
+ * one place it lives now.
+ */
+export function PageHeader({
+  title,
+  accent,
+  sub,
+  right,
+}: {
+  title: string;
+  accent?: string;
+  sub?: ReactNode;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-4 px-1 pt-1 pb-1">
+      <div className="min-w-0">
+        <h1 className="text-[28px] leading-[1.1] font-semibold tracking-[-0.02em] text-ink sm:text-[34px]">
+          {title}
+          {accent && <span className="text-amber-ink"> {accent}</span>}
+        </h1>
+        {sub && <div className="mt-2 text-[13px] text-faint">{sub}</div>}
+      </div>
+      {right && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{right}</div>
+      )}
     </div>
   );
 }
@@ -71,13 +112,20 @@ export function EmptyState({
   title,
   hint,
   action,
+  icon: Icon,
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
+  icon?: LucideIcon;
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center">
+      {Icon && (
+        <span className="mb-1 grid size-10 place-items-center rounded-xl bg-tint text-faint">
+          <Icon className="size-4.5" />
+        </span>
+      )}
       <p className="text-sm text-body">{title}</p>
       {hint && <p className="max-w-md text-xs leading-relaxed text-faint">{hint}</p>}
       {action && <div className="mt-2">{action}</div>}
@@ -107,19 +155,17 @@ export function VerdictBadge({ passed }: { passed: boolean }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center gap-1 rounded-full py-0.5 pr-2.5 pl-1.5 text-[11px] font-medium",
         passed
           ? "bg-verdict-green/12 text-verdict-green"
           : "bg-verdict-red/12 text-verdict-red",
       )}
     >
-      <span
-        aria-hidden
-        className={cx(
-          "size-1.5 rounded-full",
-          passed ? "bg-verdict-green" : "bg-verdict-red",
-        )}
-      />
+      {passed ? (
+        <Check className="size-3 shrink-0" strokeWidth={2.75} />
+      ) : (
+        <X className="size-3 shrink-0" strokeWidth={2.75} />
+      )}
       {passed ? "passed" : "blocked"}
     </span>
   );
@@ -200,6 +246,14 @@ export function DeliveryBadge({ delivery }: { delivery: string | null }) {
 
 /* ————— data display ————— */
 
+const STAT_TONE: Record<string, string> = {
+  red: "text-verdict-red",
+  green: "text-verdict-green",
+  amber: "text-amber-ink",
+  violet: "text-bot-violet",
+  teal: "text-bot-teal",
+};
+
 export function StatTile({
   label,
   value,
@@ -207,6 +261,7 @@ export function StatTile({
   spark,
   href,
   tone = "neutral",
+  icon: Icon,
 }: {
   label: string;
   value: string;
@@ -214,36 +269,42 @@ export function StatTile({
   spark?: ReactNode;
   href?: string;
   tone?: Tone;
+  icon?: LucideIcon;
 }) {
   const body = (
-    <div className="glass glass-edge tile-grid relative h-full overflow-hidden rounded-2xl px-4 py-3.5 transition-colors hover:border-[color:var(--glass-highlight)]">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] tracking-wide text-faint uppercase">
+    <div className="glass glass-edge tile-grid relative h-full overflow-hidden rounded-2xl px-4 py-4 transition-[border-color,box-shadow,transform] hover:border-[color:var(--glass-highlight)] hover:shadow-[var(--overlay-shadow)]">
+      <div className="flex items-center gap-2">
+        {Icon && (
+          <Icon
+            className={cx(
+              "size-3.5 shrink-0",
+              tone === "neutral" ? "text-faint" : STAT_TONE[tone],
+            )}
+          />
+        )}
+        <span className="truncate text-[11px] font-medium tracking-[0.08em] text-faint uppercase">
           {label}
         </span>
       </div>
-      <div className="mt-2 flex items-end justify-between gap-3">
+      <div className="mt-2.5 flex items-end justify-between gap-3">
         <span
           className={cx(
-            "tnum text-[26px] leading-none font-medium",
-            tone === "red"
-              ? "text-verdict-red"
-              : tone === "green"
-                ? "text-verdict-green"
-                : tone === "amber"
-                  ? "text-amber-ink"
-                  : "text-ink",
+            "tnum text-[28px] leading-none font-semibold tracking-[-0.02em]",
+            STAT_TONE[tone] ?? "text-ink",
           )}
         >
           {value}
         </span>
-        {spark && <div className="shrink-0 opacity-80">{spark}</div>}
+        {spark && <div className="shrink-0 opacity-90">{spark}</div>}
       </div>
-      {sub && <p className="mt-1.5 text-[11px] text-faint">{sub}</p>}
+      {sub && <p className="mt-2 text-[11px] leading-snug text-faint">{sub}</p>}
     </div>
   );
   return href ? (
-    <Link href={href} className="block h-full">
+    <Link
+      href={href}
+      className="block h-full rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-amber/50"
+    >
       {body}
     </Link>
   ) : (

@@ -122,9 +122,16 @@ def _p95(values: list[int]) -> int:
 
 def read_ledger(ledger_path: Path) -> dict:
     """Aggregate ``{ts, model, cost_usd}`` lines; tolerant of a missing
-    file and malformed lines (skip-and-continue, like iter_records)."""
+    file and malformed lines (skip-and-continue, like iter_records).
+
+    ``saved_usd``/``saved_vs`` are optional and Pioneer-only (the router's
+    reported delta against a frontier baseline), so they aggregate
+    separately from spend and stay 0.0 for every other provider.
+    """
     total = 0.0
+    saved_total = 0.0
     calls = 0
+    baselines: dict[str, int] = {}
     by_model: dict[str, dict] = {}
     path = Path(ledger_path)
     if path.is_file():
@@ -139,12 +146,33 @@ def read_ledger(ledger_path: Path) -> dict:
                     model = str(entry.get("model", "unknown"))
                 except (ValueError, TypeError, AttributeError):
                     continue
+                try:
+                    saved = float(entry.get("saved_usd", 0.0) or 0.0)
+                except (ValueError, TypeError):
+                    # A malformed saving must not discard an otherwise
+                    # valid cost line — count the call, drop the saving.
+                    saved = 0.0
+                baseline = entry.get("saved_vs")
+                if saved and baseline:
+                    baselines[str(baseline)] = baselines.get(str(baseline), 0) + 1
                 calls += 1
                 total += cost
-                slot = by_model.setdefault(model, {"calls": 0, "cost_usd": 0.0})
+                saved_total += saved
+                slot = by_model.setdefault(
+                    model, {"calls": 0, "cost_usd": 0.0, "saved_usd": 0.0}
+                )
                 slot["calls"] += 1
                 slot["cost_usd"] += cost
-    return {"total_cost_usd": total, "calls": calls, "by_model": by_model}
+                slot["saved_usd"] += saved
+    return {
+        "total_cost_usd": total,
+        "total_saved_usd": saved_total,
+        "calls": calls,
+        "by_model": by_model,
+        # Which frontier model(s) the saving is measured against; an
+        # unattributed figure is not a claim anyone can check.
+        "saved_vs": baselines,
+    }
 
 
 def stats(store: MemoryStore, ledger_path: Path, *, env=None) -> dict:

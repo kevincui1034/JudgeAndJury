@@ -201,7 +201,13 @@ def test_stats_empty_store_ok(tmp_repo, monkeypatch):
     json_result = runner.invoke(app, ["memory", "stats", "--json"])
     data = json.loads(json_result.stdout)
     assert data["records"] == 0
-    assert data["ledger"] == {"total_cost_usd": 0.0, "calls": 0, "by_model": {}}
+    assert data["ledger"] == {
+        "total_cost_usd": 0.0,
+        "total_saved_usd": 0.0,
+        "calls": 0,
+        "by_model": {},
+        "saved_vs": {},
+    }
 
 
 def test_stats_rates(tmp_path, record_factory):
@@ -218,5 +224,9 @@ def test_stats_rates(tmp_path, record_factory):
 
 def test_read_ledger_missing_file(tmp_path):
     assert read_ledger(tmp_path / "nope.jsonl") == {
-        "total_cost_usd": 0.0, "calls": 0, "by_model": {},
+        "total_cost_usd": 0.0,
+        "total_saved_usd": 0.0,
+        "calls": 0,
+        "by_model": {},
+        "saved_vs": {},
     }

@@ -1,5 +1,7 @@
+import { RepoSwitcher } from "@/components/shell/RepoSwitcher";
 import { NavRail } from "@/components/ui/NavRail";
 import { LiveDot } from "@/components/ui/LiveDot";
+import { listRepos } from "@/lib/queries/traces";
 import { requireRepo } from "@/lib/repo";
 
 export default async function RepoLayout({
@@ -10,18 +12,25 @@ export default async function RepoLayout({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const { repo } = await requireRepo(repoId);
+  const { user, repo } = await requireRepo(repoId);
+  const repos = await listRepos(user.id!);
   const base = `/r/${repoId}`;
 
   return (
     <>
       <NavRail
+        header={
+          <RepoSwitcher
+            current={{ id: repoId, repoSlug: repo.repoSlug }}
+            repos={repos.map((r) => ({ id: r.id, repoSlug: r.repoSlug }))}
+          />
+        }
         groups={[
           {
             title: "Gate",
             items: [
-              { href: base, label: "Overview", glyph: "◈" },
-              { href: `${base}/traces`, label: "Traces", glyph: "≡" },
+              { href: base, label: "Overview", icon: "overview" },
+              { href: `${base}/traces`, label: "Traces", icon: "traces" },
             ],
           },
           {
@@ -30,31 +39,31 @@ export default async function RepoLayout({
               {
                 href: `${base}/loop`,
                 label: "Judge ↔ Agent",
-                glyph: "⇄",
+                icon: "loop",
                 hint: "Everything the judge told your coding agent",
               },
-              { href: `${base}/intent`, label: "Checkpoints", glyph: "◷" },
-              { href: `${base}/prefs`, label: "Preferences", glyph: "★" },
+              { href: `${base}/intent`, label: "Checkpoints", icon: "checkpoints" },
+              { href: `${base}/prefs`, label: "Preferences", icon: "preferences" },
             ],
           },
           {
             title: "Research",
             items: [
-              { href: `${base}/memory`, label: "Memory", glyph: "⟲" },
-              { href: `${base}/judge`, label: "Judge & models", glyph: "⚖" },
-              { href: `${base}/config`, label: "Gate config", glyph: "⚙" },
+              { href: `${base}/memory`, label: "Memory", icon: "memory" },
+              { href: `${base}/judge`, label: "Judge & models", icon: "judge" },
+              { href: `${base}/config`, label: "Gate config", icon: "config" },
             ],
           },
         ]}
         footer={
-          <div className="glass-flat rounded-xl px-3 py-2.5">
-            <p className="truncate font-mono text-[11px] text-body">
-              {repo.repoSlug}
-            </p>
-            <div className="mt-1 flex items-center justify-between">
-              <span className="text-[10px] text-faint">connected repo</span>
-              <LiveDot repoId={repo.id} />
-            </div>
+          /* LIVE-REFRESH INVARIANT: this is the ONE <LiveDot> mount for the
+             whole app. It polls /api/live and calls router.refresh(), which
+             is how every server-rendered panel updates without client state.
+             Do not move it under a wrapper whose key changes, and do not
+             render it in the mobile Sheet as well. */
+          <div className="glass-flat flex items-center justify-between rounded-xl px-3 py-2">
+            <span className="text-[10px] text-faint">Heartbeat</span>
+            <LiveDot repoId={repo.id} />
           </div>
         }
       />

@@ -14,7 +14,11 @@ this is a sibling of ``ChatCompletionsJudge`` rather than a subclass of
   ``Authorization: Bearer <key>``.
 - **Cost.** OpenRouter returns a per-call ``usage.cost``; Pioneer bills
   credits and returns token counts, so cost comes from the local PRICE
-  table — unknown model → 0.0, exactly like the offline judge.
+  table — unknown model → 0.0, exactly like the offline judge. What
+  Pioneer does return is ``x_pioneer.savings``: a per-1M-token rate delta
+  against a named frontier baseline. That is a saving, not a spend, so it
+  rides the ledger as its own ``saved_usd`` field and never touches
+  ``cost_usd`` — see ``_extract_ledger_extra``.
 
 ``model`` accepts either a base model id or the job id returned by a
 completed Pioneer fine-tune (``job_abc123``). That is what makes stage H2
@@ -61,6 +65,42 @@ PROVIDER_PREFIX = "pioneer/"
 PRICE: dict[str, tuple[float, float]] = {}
 
 
+def _num(value) -> float:
+    """Numeric coercion that treats bools and junk as absent.
+
+    The savings block is untrusted upstream JSON; a stray string must
+    degrade to "no savings recorded", never raise mid-diagnosis.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0.0
+    return float(value)
+
+
+def router_savings(usage: dict, rate_diff: dict) -> float:
+    """USD the router saved on one call, from Pioneer's own rate deltas.
+
+    ``rate_diff_per_mtok`` is the per-1M-token difference between the
+    frontier baseline's rates and the routed model's, so multiplying it by
+    this call's token counts yields the saving for this call.
+
+    Cached prompt tokens are billed at the cache-read rate and are a
+    SUBSET of ``prompt_tokens`` in the OpenAI usage shape, so they are
+    subtracted out before the input rate applies — counting them twice
+    would overstate the saving. ``cache_write`` has no counterpart in this
+    wire format and is therefore never claimed.
+    """
+    details = usage.get("prompt_tokens_details") or {}
+    cached = max(_num(details.get("cached_tokens")), 0.0)
+    prompt = max(_num(usage.get("prompt_tokens")), 0.0)
+    uncached = max(prompt - cached, 0.0)
+    saved = (
+        uncached * _num(rate_diff.get("input"))
+        + max(_num(usage.get("completion_tokens")), 0.0) * _num(rate_diff.get("output"))
+        + cached * _num(rate_diff.get("cache_read"))
+    )
+    return saved / 1_000_000
+
+
 class PioneerJudge(ChatCompletionsJudge):
     """``PROOFJURY_PIONEER_URL`` overrides the endpoint — the hook for a
     local mock server in tests or a self-hosted proxy."""
@@ -90,3 +130,32 @@ class PioneerJudge(ChatCompletionsJudge):
             usage.get("prompt_tokens", 0),
             usage.get("completion_tokens", 0),
         )
+
+    def _extract_ledger_extra(self, data: dict) -> dict:
+        """Record what the ROUTER SAVED, from Pioneer's own numbers.
+
+        Deliberately NOT folded into ``cost_usd``. Pioneer bills credits
+        and publishes no USD rate for the routed model, so the call's cost
+        stays the honest 0.0 of an unpriced model; what the response does
+        carry is a rate delta against a named frontier baseline, which is a
+        different claim and gets a different field. Reading a saving as a
+        spend would be the one way to make this ledger lie.
+
+        Absent on a non-router call (a pinned model saves nothing to
+        report) and on any response without the block, so the entry shape
+        stays three keys unless there is a real number to add.
+        """
+        savings = (data.get("x_pioneer") or {}).get("savings") or {}
+        rate_diff = savings.get("rate_diff_per_mtok") or {}
+        if not isinstance(rate_diff, dict):
+            return {}
+        saved = router_savings(data.get("usage") or {}, rate_diff)
+        if saved <= 0:
+            return {}
+        extra: dict = {"saved_usd": saved}
+        baseline = savings.get("baseline_model")
+        if baseline:
+            # The saving is meaningless without the model it is measured
+            # against — store the comparison, not just the number.
+            extra["saved_vs"] = str(baseline)
+        return extra

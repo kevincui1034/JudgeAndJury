@@ -56,8 +56,15 @@ def parse_content(content: str, judge_input: JudgeInput) -> tuple[str, list[str]
     return content.strip(), compile_fix_steps(judge_input.failures)
 
 
-def append_ledger(root: Path | None, model: str, cost: float) -> None:
+def append_ledger(
+    root: Path | None, model: str, cost: float, extra: dict | None = None
+) -> None:
     """Append one ``{ts, model, cost_usd}`` line to ``<root>/ledger.jsonl``.
+
+    ``extra`` merges provider-specific fields into the entry (Pioneer's
+    router savings). It is omitted entirely when empty, so a provider that
+    reports nothing extra keeps the exact three-key entry shape readers
+    have always seen.
 
     Best-effort: a missing root or an OSError never breaks a diagnosis.
     """
@@ -72,6 +79,7 @@ def append_ledger(root: Path | None, model: str, cost: float) -> None:
             .replace("+00:00", "Z"),
             "model": model,
             "cost_usd": cost,
+            **(extra or {}),
         }
         with (root / "ledger.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
@@ -133,6 +141,14 @@ class ChatCompletionsJudge:
     def _extract_cost(self, data: dict) -> float:
         return 0.0
 
+    def _extract_ledger_extra(self, data: dict) -> dict:
+        """Provider-specific ledger fields beyond ``{ts, model, cost_usd}``.
+
+        Empty by default — only a provider that reports something the
+        three-key entry cannot express (Pioneer's router savings) fills it.
+        """
+        return {}
+
     def _label_model(self, model_id: str) -> str:
         """Provenance label for the returned model id.
 
@@ -165,7 +181,7 @@ class ChatCompletionsJudge:
         content = data["choices"][0]["message"]["content"]
         cost = self._extract_cost(data)
         model_id = self._label_model(data.get("model") or self.model)
-        append_ledger(self.root, model_id, cost)
+        append_ledger(self.root, model_id, cost, self._extract_ledger_extra(data))
         return content, model_id, cost
 
     def diagnose(self, judge_input: JudgeInput) -> JudgeOutput:

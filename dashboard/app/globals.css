@@ -109,9 +109,9 @@
   /* canvas dot-grid */
   --grid-line: rgb(13 17 23 / 0.055);
   --grid-size: 28px;
-  /* The tile grid sits UNDER content on a white card; at the dot-grid's
-     weight it reads as graph paper. It is texture, not structure. */
-  --tile-line: rgb(13 17 23 / 0.022);
+  /* The tile grid is part of the night world's character. On a white card at
+     any visible weight it reads as graph paper, so day drops it entirely. */
+  --tile-line: transparent;
 
   /* glows — on white a diffuse halo vanishes, so day trades it for a
      stronger ring */

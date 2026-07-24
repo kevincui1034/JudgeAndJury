@@ -954,6 +954,14 @@ def memory_stats(
         "judge spend",
         f"${ledger['total_cost_usd']:.4f} over {ledger['calls']} call(s)",
     )
+    if ledger.get("total_saved_usd"):
+        # Router savings only — attributed to the baseline Pioneer named,
+        # since "saved $X" without "versus what" is not a checkable claim.
+        versus = ", ".join(sorted(ledger.get("saved_vs") or {})) or "a frontier model"
+        table.add_row(
+            "router savings",
+            f"${ledger['total_saved_usd']:.4f} vs {versus} (pioneer/auto)",
+        )
     console.print(table)
     candidates = advisories["graduation_candidates"]
     if candidates:
