@@ -26,6 +26,7 @@ from rich.table import Table
 from typer.core import TyperCommand
 
 from . import __version__
+from . import config as config_module
 from .agent_detect import detect_installed_agents
 from .config import clear_judge_config, config_path, save_judge_config
 from .envfile import parse_env_file
@@ -80,6 +81,21 @@ RUN_KINDS = ("tests", "build", "lint", "typecheck", "qa")
 JUDGE_PROVIDERS = ("openrouter", "anthropic", "openai", "pioneer")
 
 _SENTINEL_KEY = "proofjury_has_sentinel"
+
+
+@app.callback()
+def _bootstrap() -> None:
+    """Load the project's own ``.env`` before any command runs.
+
+    Lets a repo ship its inference credentials (Pioneer key, sponsor
+    endpoints) so contributors and demo machines work without each
+    person doing BYOK. The real environment always wins, and the file is
+    git-ignored — see config.PROJECT_ENV_KEYS for the allowlist.
+    """
+    try:
+        config_module.apply_project_env(Path.cwd())
+    except Exception:
+        pass  # a malformed .env must never stop the gate from running
 
 
 class SentinelCommand(TyperCommand):

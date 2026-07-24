@@ -28,15 +28,25 @@ from ._openai_compat import ChatCompletionsJudge, token_cost
 
 PIONEER_URL = "https://api.pioneer.ai/v1/chat/completions"
 
-#: Pioneer routes to hosted decoder models; the live catalog is
-#: ``GET https://api.pioneer.ai/v1/base-models``. Override per-repo with
-#: ``[judge].model`` / ``PROOFJURY_JUDGE_MODEL`` (or with a tuned job id).
-DEFAULT_MODEL = "gpt-4.1"
+#: Pioneer's MODEL ROUTER: every prompt is dispatched to the best model
+#: for that job across 70+ open and frontier models. It is the default
+#: because the judge has three very different surfaces — a cheap
+#: correction classifier, a mid-tier advisory reviewer, a heavier
+#: diagnosis — and routing per-prompt is strictly better than pinning one
+#: model for all three. The platform's Routers page reports the savings
+#: versus calling a frontier model every time.
+#:
+#: Override with ``[judge].model`` / ``PROOFJURY_JUDGE_MODEL``, a specific
+#: catalog id (``GET https://api.pioneer.ai/v1/base-models``), or a tuned
+#: job id from H2.
+DEFAULT_MODEL = "Pioneer/Auto"
 MAX_TOKENS = 700
 
 #: Pioneer routes to models it does not own, so the bare id it echoes back
 #: ("gpt-4.1") would be indistinguishable from a direct OpenAI call in the
-#: record and the ledger. Namespacing it keeps provenance readable.
+#: record and the ledger. Namespacing it keeps provenance readable — and
+#: under the router it is what makes the ROUTING DECISION visible: the
+#: request says "Pioneer/Auto", the record says which model answered.
 PROVIDER_PREFIX = "pioneer/"
 
 #: USD per 1M tokens: (input, output). Pioneer bills in credits rather
@@ -61,7 +71,10 @@ class PioneerJudge(ChatCompletionsJudge):
         return {"max_tokens": MAX_TOKENS}
 
     def _label_model(self, model_id: str) -> str:
-        if model_id.startswith(PROVIDER_PREFIX):
+        # Case-insensitive: the router echoes back "Pioneer/Auto" when it
+        # does not name the chosen model, and "pioneer/Pioneer/Auto" would
+        # be nonsense.
+        if model_id.lower().startswith(PROVIDER_PREFIX):
             return model_id
         return PROVIDER_PREFIX + model_id
 

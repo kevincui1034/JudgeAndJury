@@ -127,8 +127,53 @@ def test_pioneer_unknown_model_costs_zero_rather_than_guessing(tmp_path):
     assert judge.diagnose(_judge_input()).cost_usd == 0.0
 
 
-def test_pioneer_default_model():
-    assert PioneerJudge(api_key="k").model == "gpt-4.1"
+def test_pioneer_default_model_is_the_router():
+    """Pioneer/Auto dispatches each prompt to the best model for the job.
+    The judge has three surfaces with very different cost profiles (cheap
+    correction classifier, mid-tier advisory reviewer, heavier diagnosis),
+    so routing per-prompt beats pinning one model for all three."""
+    assert PioneerJudge(api_key="k").model == "Pioneer/Auto"
+
+
+def test_router_choice_is_visible_in_the_record(tmp_path):
+    """The request says Pioneer/Auto; the record says which model actually
+    answered — that is how routing decisions become auditable."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["model"] == "Pioneer/Auto"
+        return httpx.Response(
+            200,
+            json=_reply(
+                json.dumps({"diagnosis": "d", "fix_steps": []}), model="qwen3-32b"
+            ),
+        )
+
+    judge = PioneerJudge(
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+        root=tmp_path / ".proofjury",
+    )
+    assert judge.diagnose(_judge_input()).model_id == "pioneer/qwen3-32b"
+
+
+def test_router_echoing_its_own_name_is_not_double_prefixed(tmp_path):
+    """The router may echo "Pioneer/Auto" back rather than naming the
+    chosen model; "pioneer/Pioneer/Auto" would be nonsense."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_reply(
+                json.dumps({"diagnosis": "d", "fix_steps": []}), model="Pioneer/Auto"
+            ),
+        )
+
+    judge = PioneerJudge(
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+        root=tmp_path / ".proofjury",
+    )
+    assert judge.diagnose(_judge_input()).model_id == "Pioneer/Auto"
 
 
 def test_pioneer_serves_a_finetuned_job_id(tmp_path):
@@ -229,7 +274,7 @@ def test_factory_selects_pioneer_from_env(tmp_path):
     judge = get_judge(env, root=tmp_path)
     assert isinstance(judge, PioneerJudge)
     assert judge.api_key == "pk-1"
-    assert judge.model == "gpt-4.1"
+    assert judge.model == "Pioneer/Auto"
 
 
 def test_autodetect_keeps_pioneer_last(tmp_path):
@@ -356,7 +401,7 @@ def test_intent_reviewer_honors_checkpoint_model_override(tmp_path):
     classifier = get_intent_chat(env, tmp_path, repo_config)
 
     assert reviewer.__self__.model == "job_abc123"
-    assert classifier.__self__.model == "gpt-4.1"
+    assert classifier.__self__.model == "Pioneer/Auto"
 
 
 def test_advisory_model_override_serves_a_tuned_job_id(tmp_path):

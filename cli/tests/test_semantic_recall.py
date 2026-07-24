@@ -19,11 +19,13 @@ from proofjury.checks.base import CheckResult, Evidence
 from proofjury.memory.recall import recall, strong_match
 from proofjury.memory.schema import MemoryRecord
 from proofjury.memory.semantic import (
+    DEFAULT_DSN,
     HashEmbedder,
     JsonlBackend,
     SemanticIndex,
     get_index,
     record_document,
+    vector_dsn,
     vector_path,
 )
 from proofjury.memory.store import MemoryStore
@@ -422,9 +424,36 @@ def test_vector_dir_never_enters_the_worktree_digest(tmp_repo):
     assert worktree_digest(tmp_repo.root) == before
 
 
-def test_vector_path_default_and_override(tmp_path):
-    assert vector_path(tmp_path, {}) == tmp_path / ".proofjury" / "vector"
-    assert vector_path(tmp_path, {"ACTIAN_VECTOR_PATH": "/tmp/vec"}).as_posix() == "/tmp/vec"
+def test_vector_scratch_dir_lives_under_proofjury(tmp_path):
+    assert vector_path(tmp_path) == tmp_path / ".proofjury" / "vector"
+
+
+def test_vector_dsn_default_and_overrides():
+    """Actian's client takes an ADDRESS, not a directory. H0 wrote down
+    ACTIAN_VECTOR_PATH before that was known, so it stays an alias."""
+    assert vector_dsn({}) == DEFAULT_DSN == "localhost:6574"
+    assert vector_dsn({"ACTIAN_VECTOR_URL": "10.0.0.5:6574"}) == "10.0.0.5:6574"
+    assert vector_dsn({"ACTIAN_VECTOR_PATH": "10.0.0.9:6574"}) == "10.0.0.9:6574"
+    # The documented name wins when both are set.
+    assert (
+        vector_dsn({"ACTIAN_VECTOR_URL": "a:1", "ACTIAN_VECTOR_PATH": "b:2"}) == "a:1"
+    )
+
+
+def test_actian_point_ids_are_stable_and_reversible():
+    """Actian keys points by integer but Proofjury ids are strings, so the
+    id is hashed and the original rides in the payload."""
+    from proofjury.memory.semantic import _point_id
+
+    assert _point_id("chk_012") == _point_id("chk_012")  # idempotent upserts
+    assert _point_id("chk_012") != _point_id("chk_013")
+    assert 0 < _point_id("chk_012") < 2**63
+
+
+def test_open_actian_backend_none_without_client():
+    from proofjury.memory.semantic import open_actian_backend
+
+    assert open_actian_backend("localhost:6574") is None
 
 
 # --------------------------------------------------------------------------

@@ -42,7 +42,7 @@ dev = ["pytest>=8"]
 # Kept OUT of the base install so `pip install proofjury` stays at
 # typer + rich + httpx; without it, memory.semantic.get_index() returns
 # None and recall falls back to the heuristic path unchanged.
-semantic = ["actian-vectorai>=0.1"]
+semantic = ["actian-vectorai-client>=0.1"]
 
 [project.scripts]
 proofjury = "proofjury.cli:app"

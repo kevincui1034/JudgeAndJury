@@ -5,11 +5,15 @@ tokens (env-var names, file:line anchors), then recency. That misses the
 case this module exists for — the same underlying mistake described in
 different words ("payment key unset" vs "missing STRIPE_API_KEY").
 
-Actian VectorAI DB is the store because it is EMBEDDED and portable: the
-index lives inside ``.proofjury/`` next to the JSONL, with the same API
-from a laptop to a CI runner. Analysis stays local; the only network hop
-is the embedding call, which reuses the already-configured BYOK judge
-transport (H1) and sends the same scrubbed text the judge already sees.
+Actian VectorAI DB is the store because it runs LOCAL and portable: the
+Community Edition listens on localhost, so vectors never leave the
+machine and the same client works from a laptop to a CI runner. Analysis
+stays local; the only network hop is the embedding call, which reuses the
+already-configured judge transport (H1) and sends the same scrubbed text
+the judge already sees.
+
+Note the client takes an ADDRESS (``localhost:6574``), not a directory —
+VectorAI DB is a local server process, not a file-backed embedded store.
 
 Authority rules (enforced in ``recall.py``, asserted in tests):
 
@@ -41,7 +45,10 @@ from .schema import MemoryRecord
 TIMEOUT_SECONDS = 10.0
 DEFAULT_EMBED_MODEL = "text-embedding-3-small"
 
-#: Where the embedded index lives; ACTIAN_VECTOR_PATH overrides.
+#: Actian VectorAI DB Community Edition's default local address.
+DEFAULT_DSN = "localhost:6574"
+
+#: Local scratch dir under .proofjury/ (offline fallback backend only).
 VECTOR_DIRNAME = "vector"
 
 _CHAT_SUFFIX = "/chat/completions"
@@ -69,43 +76,90 @@ class VectorBackend(Protocol):
         ...
 
 
-def open_actian_backend(path: Path) -> VectorBackend | None:
-    """Open (or create) the Actian VectorAI DB collection at ``path``.
+def open_actian_backend(dsn: str) -> VectorBackend | None:
+    """Connect to Actian VectorAI DB at ``dsn`` (``host:port``).
 
-    THIS IS THE ONE ACTIAN-SPECIFIC FUNCTION — the local install happens
-    at PLAN-swarmhack H0, and only the import/constructor names below
-    need to match the installed SDK. Everything else in this module is
-    written against the ``VectorBackend`` protocol and is already tested.
+    THIS IS THE ONE ACTIAN-SPECIFIC FUNCTION. Everything else in this
+    module is written against the ``VectorBackend`` protocol and is
+    tested without the SDK.
 
-    Returns None when the library is not installed, which is what makes
-    the whole feature degrade to today's heuristic recall.
+    Returns None when the client library is not installed or the server
+    is not reachable — which is what makes the whole feature degrade to
+    today's heuristic recall rather than break the gate.
     """
-    try:  # pragma: no cover — requires the Actian SDK to be installed
-        from actian import vectorai  # type: ignore[import-not-found]
+    try:  # pragma: no cover — requires actian-vectorai-client installed
+        from actian_vectorai import VectorAIClient  # type: ignore[import-not-found]
     except Exception:
         return None
     try:  # pragma: no cover
-        path.mkdir(parents=True, exist_ok=True)
-        return _ActianBackend(vectorai.connect(str(path)))
+        client = VectorAIClient(dsn)
+        client.health_check()
+        return _ActianBackend(client)
     except Exception:
         return None
 
 
+def _point_id(doc_id: str) -> int:
+    """Stable unsigned 63-bit id for a Proofjury record id.
+
+    Actian points are keyed by integer, but Proofjury ids are strings
+    ("chk_012", "correction:ckpt_003"). Hashing keeps upserts idempotent
+    for the same record, and the original string rides along in the
+    payload so search results can be mapped back exactly.
+    """
+    return int.from_bytes(hashlib.sha1(doc_id.encode("utf-8")).digest()[:8], "big") >> 1
+
+
 class _ActianBackend:  # pragma: no cover — exercised only with the SDK present
-    """Adapter from the Actian client to the ``VectorBackend`` protocol."""
+    """Adapter from the Actian client to the ``VectorBackend`` protocol.
+
+    The collection is created lazily on first upsert because its vector
+    size must match the embedder actually in use (1536 for
+    text-embedding-3-small, 128 for the offline HashEmbedder) — there is
+    no correct dimension to guess at connect time.
+    """
 
     COLLECTION = "proofjury_memory"
 
     def __init__(self, client):
         self._client = client
-        self._collection = client.collection(self.COLLECTION, create_if_missing=True)
+        self._ready = False
+
+    def _ensure_collection(self, size: int) -> None:
+        if self._ready:
+            return
+        from actian_vectorai import Distance, VectorParams  # type: ignore
+
+        try:
+            self._client.collections.create(
+                self.COLLECTION,
+                vectors_config=VectorParams(size=size, distance=Distance.Cosine),
+            )
+        except Exception:
+            pass  # already exists — the common case after the first run
+        self._ready = True
 
     def upsert(self, doc_id: str, vector: Sequence[float], metadata: dict) -> None:
-        self._collection.upsert(id=doc_id, vector=list(vector), metadata=metadata)
+        from actian_vectorai import PointStruct  # type: ignore
+
+        vector = list(vector)
+        self._ensure_collection(len(vector))
+        payload = {**metadata, "doc_id": doc_id}
+        self._client.points.upsert(
+            self.COLLECTION,
+            [PointStruct(id=_point_id(doc_id), vector=vector, payload=payload)],
+        )
 
     def search(self, vector: Sequence[float], k: int) -> list[tuple[str, float]]:
-        hits = self._collection.search(vector=list(vector), top_k=k)
-        return [(str(h["id"]), float(h.get("score", 0.0))) for h in hits]
+        vector = list(vector)
+        self._ensure_collection(len(vector))
+        hits = self._client.points.search(self.COLLECTION, vector=vector, limit=k)
+        out: list[tuple[str, float]] = []
+        for hit in hits:
+            doc_id = (getattr(hit, "payload", None) or {}).get("doc_id")
+            if doc_id:
+                out.append((str(doc_id), float(getattr(hit, "score", 0.0) or 0.0)))
+        return out
 
 
 # --------------------------------------------------------------------------
@@ -304,12 +358,25 @@ class SemanticIndex:
 # --------------------------------------------------------------------------
 
 
-def vector_path(root: Path, env: Mapping[str, str] | None = None) -> Path:
-    """``.proofjury/vector/`` unless ACTIAN_VECTOR_PATH overrides it."""
+def vector_dsn(env: Mapping[str, str] | None = None) -> str:
+    """Where Actian VectorAI DB is listening (``host:port``).
+
+    Defaults to the Community Edition's local port. ``ACTIAN_VECTOR_URL``
+    is the override; ``ACTIAN_VECTOR_PATH`` is accepted as an alias
+    because that is the name PLAN-swarmhack H0 wrote down before the
+    client turned out to take an address rather than a directory.
+    """
     env = os.environ if env is None else env
-    override = env.get("ACTIAN_VECTOR_PATH")
-    if override:
-        return Path(override)
+    return env.get("ACTIAN_VECTOR_URL") or env.get("ACTIAN_VECTOR_PATH") or DEFAULT_DSN
+
+
+def vector_path(root: Path, env: Mapping[str, str] | None = None) -> Path:
+    """Local scratch dir for semantic-layer state under ``.proofjury/``.
+
+    The vector data itself lives in the Actian server; this is only for
+    the offline JsonlBackend fallback. Kept under ``.proofjury/`` so it is
+    excluded from the worktree digest like the rest of the gate's state.
+    """
     return Path(root) / ".proofjury" / VECTOR_DIRNAME
 
 
@@ -343,7 +410,7 @@ def get_index(
             return None
 
         if backend is None:
-            backend = open_actian_backend(vector_path(root, env))
+            backend = open_actian_backend(vector_dsn(env))
         if backend is None:
             return None
 

@@ -212,6 +212,66 @@ def sync_enabled(env: Mapping[str, str] | None = None) -> bool:
     return resolve_sync(env) is not None
 
 
+#: Sponsor/platform credentials a PROJECT may ship in its own ``.env``
+#: (plus anything ``PROOFJURY_``-prefixed). Deliberately an allowlist, not
+#: "load every key": a repo-level file must not be able to inject
+#: arbitrary environment into the deploy context the env_vars check
+#: evaluates.
+PROJECT_ENV_KEYS = frozenset(
+    {
+        "PIONEER_API_KEY",
+        "PIONEER_TRAINING_URL",
+        "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "SENSO_API_KEY",
+        "SENSO_KB_ID",
+        "SENSO_API_URL",
+        "ACTIAN_VECTOR_URL",
+        "ACTIAN_VECTOR_PATH",
+        "REPLAY_API_KEY",
+    }
+)
+
+PROJECT_ENV_FILE = ".env"
+
+
+def load_project_env(root, env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Allowlisted keys from ``<root>/.env`` that are NOT already set.
+
+    This is how a project ships its own inference credentials instead of
+    requiring every user to BYOK. The real environment always wins, so a
+    shell export or a CI secret overrides the checked-out file, and a
+    missing/unreadable/malformed file is simply no keys.
+
+    The file is git-ignored — a key in the repo is a leaked key.
+    """
+    from pathlib import Path
+
+    from .envfile import parse_env_file
+
+    env = _env(env)
+    try:
+        parsed = parse_env_file(Path(root) / PROJECT_ENV_FILE)
+    except OSError:
+        return {}
+    return {
+        key: value
+        for key, value in parsed.items()
+        if (key in PROJECT_ENV_KEYS or key.startswith("PROOFJURY_"))
+        and not env.get(key)
+    }
+
+
+def apply_project_env(root, env=None) -> list[str]:
+    """Merge ``<root>/.env`` into the process environment; return the
+    names applied (never the values — those are secrets)."""
+    target = os.environ if env is None else env
+    loaded = load_project_env(root, target)
+    target.update(loaded)
+    return sorted(loaded)
+
+
 def resolve_judge(
     env: Mapping[str, str] | None = None, config: dict | None = None
 ) -> dict | None:
