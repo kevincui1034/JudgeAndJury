@@ -25,9 +25,9 @@ export default async function DevicePage({
   const { code, done, error } = await searchParams;
 
   return (
-    <main className="dot-grid flex min-h-dvh items-center justify-center p-8">
-      <div className="glass glass-edge w-full max-w-md rounded-2xl p-8">
-        <h1 className="text-[22px] font-medium tracking-tight text-ink">
+    <div>
+      <div>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-ink">
           Connect a <span className="text-amber-ink">machine</span>
         </h1>
 
@@ -70,7 +70,7 @@ export default async function DevicePage({
                   type="submit"
                   name="decision"
                   value="approve"
-                  className="flex-1 rounded-xl bg-amber px-4 py-2.5 text-[13px] font-medium text-surface-3 transition-colors hover:bg-amber-deep"
+                  className="flex-1 rounded-xl bg-amber px-4 py-2.5 text-[13px] font-medium text-on-amber transition-colors hover:bg-amber-deep"
                 >
                   Approve
                 </button>
@@ -78,7 +78,7 @@ export default async function DevicePage({
                   type="submit"
                   name="decision"
                   value="deny"
-                  className="flex-1 rounded-xl border border-glass-border px-4 py-2.5 text-[13px] text-body transition-colors hover:border-verdict-red hover:text-verdict-red"
+                  className="flex-1 rounded-xl border border-line-2 px-4 py-2.5 text-[13px] text-body transition-colors hover:border-verdict-red hover:text-verdict-red"
                 >
                   Deny
                 </button>
@@ -87,6 +87,6 @@ export default async function DevicePage({
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

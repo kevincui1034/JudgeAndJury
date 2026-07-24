@@ -122,6 +122,9 @@
   --glow-green:
     0 0 0 1px rgb(15 157 88 / 0.35), 0 4px 16px -6px rgb(15 157 88 / 0.2);
 
+  /* Text placed ON an amber fill. In day, --surface-3 is a near-white and
+     would be invisible on #f0a91f. */
+  --on-amber: #2a1a05;
   --select-bg: rgb(240 169 31 / 0.3);
 }
 
@@ -201,6 +204,7 @@
   --glow-green:
     0 0 0 1px rgb(74 222 128 / 0.28), 0 8px 32px -8px rgb(74 222 128 / 0.22);
 
+  --on-amber: #05080d;
   --select-bg: rgb(245 184 61 / 0.28);
 }
 
@@ -224,6 +228,7 @@
   --color-bot-violet: var(--bot-violet);
   --color-bot-rose: var(--bot-rose);
   --color-glass-border: var(--glass-border);
+  --color-on-amber: var(--on-amber);
 
   /* A tint of the foreground over the surface. Replaces the `bg-white/[0.0x]`
      literals, which read as nothing on a light background. */
@@ -246,7 +251,7 @@
   --color-popover: var(--surface-2);
   --color-popover-foreground: var(--ink);
   --color-primary: var(--amber);
-  --color-primary-foreground: var(--surface-3);
+  --color-primary-foreground: var(--on-amber);
   --color-secondary: var(--surface-3);
   --color-secondary-foreground: var(--ink);
   --color-muted: var(--surface-3);
@@ -349,6 +354,41 @@ body {
 }
 .verdict-advice {
   box-shadow: var(--glow-amber);
+}
+
+/* ————— scroll reveal (marketing only) —————
+   Deliberately CSS scroll-driven rather than JS-in-view. A JS reveal ships
+   the server HTML at opacity:0 and only reveals it once an observer fires —
+   so with JS blocked, or to a crawler, the whole page below the fold is
+   blank. Here the element is visible by default and the animation only
+   attaches where the browser supports a view() timeline; anywhere else the
+   rule simply does not apply and the content is just... there.
+
+   Reduced motion is handled by the block at the bottom of this file, which
+   zeroes animation-duration — plus the explicit guard below. */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      /* Range ends within `entry`, so anything fully on screen — including
+         everything above the fold on load — sits at 100% progress and is
+         simply visible. Ranges that end in `cover` leave tall elements, and
+         any element in a very tall viewport, stuck part-way through. */
+      animation-range: entry 0% entry calc(60% + (var(--d, 0) * 5%));
+    }
+  }
 }
 
 /* Numerals must not jitter while live-polling updates them. */
