@@ -54,7 +54,7 @@
   /* type */
   --ink: #0d1117;
   --body: #4c5665;
-  --faint: #7d8797;
+  --faint: #6b7585; /* 4.7:1 on white — it is de-emphasised, not decorative */
 
   /* structure */
   --line: #e7eaf0;
@@ -68,13 +68,14 @@
   --amber-deep: #d99414;
 
   /* verdicts — darkened until they clear 4.5:1 on white, because they are
-     rendered as text as often as they are rendered as fills */
+     rendered as text (an 11px badge) as often as they are rendered as fills.
+     The bright originals sit at 1.6-3.5:1 here and are unreadable. */
   --verdict-red: #c8362f;
   --verdict-red-deep: #a92620;
-  --verdict-green: #0f9d58;
+  --verdict-green: #0a7f46;
 
   /* vendor-neutral agent glyphs */
-  --bot-teal: #0d8f83;
+  --bot-teal: #0b8078;
   --bot-violet: #6b46e0;
   --bot-rose: #d1305a;
 

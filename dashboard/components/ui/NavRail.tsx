@@ -25,7 +25,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   Sheet,
@@ -149,8 +149,14 @@ export function NavRail({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // Close the mobile sheet on navigation.
-  useEffect(() => setOpen(false), [pathname]);
+  // Close the mobile sheet on navigation — including back/forward, which a
+  // link's onClick never sees. Adjusting state during render is the pattern
+  // React recommends here; an effect would fire a second render every time.
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    setOpen(false);
+  }
 
   return (
     <>
