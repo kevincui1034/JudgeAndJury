@@ -740,7 +740,13 @@ def run_gate(
     )
     store.append(record)
     store.append_markdown(record)
-    _semantic_index_record(root, env, config, record)
+    try:
+        # Firewalled at the CALL SITE too, matching the post-run sync hook:
+        # indexing is bookkeeping that runs after the record is durable, so
+        # even a bug inside it must never change the exit code.
+        _semantic_index_record(root, env, config, record)
+    except Exception:
+        pass
     for prior in resolved_priors:
         store.update_resolution(
             prior.id,
