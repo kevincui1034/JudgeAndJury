@@ -3,13 +3,14 @@ import Link from "next/link";
 import { AdvisoryActions } from "@/components/AdvisoryActions";
 import {
   Badge,
+  cx,
   DeliveryBadge,
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   StatTile,
-  cx,
   timeAgo,
 } from "@/components/ui/primitives";
 import { loopFeed } from "@/lib/queries/intent";
@@ -33,17 +34,18 @@ export default async function LoopPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Judge <span className="text-amber-ink">↔ Agent</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Everything the judge has told your coding agent — gate advisories and
+      <PageHeader
+        title="Judge"
+        accent="↔ Agent"
+        sub={
+          <>
+            Everything the judge has told your coding agent — gate advisories and
           checkpoint intent findings in one conversation. None of it blocked
           anything; what you approve here reaches the agent on its next gate
           run.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Total findings" value={String(feed.length)} />

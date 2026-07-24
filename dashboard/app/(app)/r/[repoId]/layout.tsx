@@ -29,7 +29,7 @@ export default async function RepoLayout({
           {
             title: "Gate",
             items: [
-              { href: base, label: "Overview", icon: "overview" },
+              { href: base, label: "Overview", icon: "overview", exact: true },
               { href: `${base}/traces`, label: "Traces", icon: "traces" },
             ],
           },

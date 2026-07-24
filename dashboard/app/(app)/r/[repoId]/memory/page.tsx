@@ -6,10 +6,11 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
+  pct,
   RankedRow,
   StatTile,
-  pct,
   timeAgo,
 } from "@/components/ui/primitives";
 import { classReliability, recentTraces } from "@/lib/queries/highlights";
@@ -38,16 +39,17 @@ export default async function MemoryPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Gate <span className="text-amber-ink">memory</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Every block becomes a prior. When the same failure recurs, the gate
+      <PageHeader
+        title="Gate"
+        accent="memory"
+        sub={
+          <>
+            Every block becomes a prior. When the same failure recurs, the gate
           cites the record that explains it — and your labels decide which
           classes it still trusts.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Blocks" value={String(recall.blocked)} tone="red" />

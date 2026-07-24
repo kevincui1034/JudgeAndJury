@@ -83,7 +83,11 @@ export function PageHeader({
           {title}
           {accent && <span className="text-amber-ink"> {accent}</span>}
         </h1>
-        {sub && <div className="mt-2 text-[13px] text-faint">{sub}</div>}
+        {sub && (
+          <div className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
+            {sub}
+          </div>
+        )}
       </div>
       {right && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">{right}</div>

@@ -5,6 +5,7 @@ import {
   Badge,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   timeAgo,
 } from "@/components/ui/primitives";
@@ -49,17 +50,18 @@ export default async function ConfigPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Gate <span className="text-amber-ink">config</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Tune what the judge advises. Changes queue here and are written to{" "}
+      <PageHeader
+        title="Gate"
+        accent="config"
+        sub={
+          <>
+            Tune what the judge advises. Changes queue here and are written to{" "}
           <Mono>.proofjury.toml</Mono> by your own machine on its next sync —
           the dashboard never writes the file. Nothing here can change a past
           verdict: records are immutable, config feeds future runs only.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {!cfg && (
         <GlassPanel>

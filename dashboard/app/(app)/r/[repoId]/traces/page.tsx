@@ -3,13 +3,14 @@ import Link from "next/link";
 import {
   Badge,
   ClassChip,
+  cx,
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
-  VerdictBadge,
-  cx,
   timeAgo,
+  VerdictBadge,
 } from "@/components/ui/primitives";
 import { listTraces, traceFacets } from "@/lib/queries/traces";
 import { requireRepo } from "@/lib/repo";
@@ -80,14 +81,15 @@ export default async function TracesPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Gate <span className="text-amber-ink">traces</span>
-        </h1>
-        <p className="mt-2 text-[13px] text-faint">
-          Every intercepted command, with the evidence behind its verdict.
-        </p>
-      </div>
+      <PageHeader
+        title="Gate"
+        accent="traces"
+        sub={
+          <>
+            Every intercepted command, with the evidence behind its verdict.
+          </>
+        }
+      />
 
       <GlassPanel>
         <div className="flex flex-wrap items-center gap-1.5 px-5 pt-4 pb-3">

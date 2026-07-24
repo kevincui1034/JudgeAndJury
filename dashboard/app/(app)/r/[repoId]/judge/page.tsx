@@ -5,6 +5,7 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   RankedRow,
   StatTile,
@@ -53,16 +54,17 @@ export default async function JudgePage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Judge <span className="text-amber-ink">&amp; models</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Which model answered each judge surface, what it cost, and which
+      <PageHeader
+        title="Judge"
+        accent="&amp; models"
+        sub={
+          <>
+            Which model answered each judge surface, what it cost, and which
           authored policy it cited. All of it explains verdicts the
           deterministic checks already reached.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {/* capability chips — computed CLI-side, no secrets uploaded */}
       {cfg && (

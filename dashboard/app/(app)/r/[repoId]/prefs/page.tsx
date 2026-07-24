@@ -3,6 +3,7 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   timeAgo,
 } from "@/components/ui/primitives";
@@ -26,17 +27,18 @@ export default async function PrefsPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Learned <span className="text-amber-ink">preferences</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Distilled from repeated corrections. Only <em>active</em>{" "}
+      <PageHeader
+        title="Learned"
+        accent="preferences"
+        sub={
+          <>
+            Distilled from repeated corrections. Only <em>active</em>{" "}
           preferences are injected at session start — a candidate waits for a
           human, because a preference the agent follows forever should not be
           created by a classifier alone.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <GlassPanel>
         <PanelHeader title="Preferences" accent={`(${prefs.length})`} />

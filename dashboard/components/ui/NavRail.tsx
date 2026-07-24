@@ -60,6 +60,12 @@ export interface NavItem {
   label: string;
   icon: NavIconKey;
   hint?: string;
+  /**
+   * Match this href exactly. Required for an index route: `/r/<id>` is a
+   * prefix of every sibling, so without this the Overview item highlights on
+   * all nine pages at once.
+   */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -69,8 +75,8 @@ export interface NavGroup {
 
 function useIsActive() {
   const pathname = usePathname();
-  return (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
+  return (href: string, exact?: boolean) =>
+    exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
 }
 
 function NavLinks({
@@ -90,7 +96,7 @@ function NavLinks({
           </p>
           <div className="space-y-0.5">
             {group.items.map((item) => {
-              const active = isActive(item.href);
+              const active = isActive(item.href, item.exact);
               const Icon = ICONS[item.icon];
               return (
                 <Link

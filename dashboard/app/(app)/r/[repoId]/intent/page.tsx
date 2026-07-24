@@ -3,10 +3,11 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
+  pct,
   RankedRow,
   StatTile,
-  pct,
   timeAgo,
 } from "@/components/ui/primitives";
 import {
@@ -32,17 +33,18 @@ export default async function IntentPage({
 
   return (
     <div className="space-y-4 pb-2">
-      <div className="px-1 pt-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Agent <span className="text-amber-ink">checkpoints</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-faint">
-          Every time the agent claimed done. Your next message is the label:
+      <PageHeader
+        title="Agent"
+        accent="checkpoints"
+        sub={
+          <>
+            Every time the agent claimed done. Your next message is the label:
           push back and it&apos;s a correction; move on and that&apos;s implicit
           acceptance. Three corrections in one category graduate into a
           candidate preference.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {stats.total === 0 ? (
         <GlassPanel>

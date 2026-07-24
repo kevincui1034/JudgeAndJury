@@ -1,4 +1,13 @@
 import Link from "next/link";
+import {
+  Activity,
+  CircleCheck,
+  ListTree,
+  RotateCcw,
+  ShieldX,
+  Timer,
+  TriangleAlert,
+} from "lucide-react";
 
 import { VerdictTimeseries } from "@/components/charts/VerdictTimeseries";
 import { OverlayCard } from "@/components/ui/OverlayCard";
@@ -8,6 +17,7 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   RankedRow,
   Sparkline,
@@ -142,6 +152,7 @@ export default async function OverviewPage({
           sub={`${stats.passed} passed · ${stats.blocked} blocked`}
           spark={<Sparkline points={runsSpark} tone="var(--body)" />}
           href={`${base}/traces`}
+          icon={Activity}
         />
         <StatTile
           label="Blocked"
@@ -150,6 +161,7 @@ export default async function OverviewPage({
           tone="red"
           spark={<Sparkline points={blockedSpark} tone="var(--verdict-red)" />}
           href={`${base}/traces?verdict=blocked`}
+          icon={ShieldX}
         />
         <StatTile
           label="Recall hit rate"
@@ -157,17 +169,20 @@ export default async function OverviewPage({
           sub="blocks matched to a prior"
           tone="amber"
           href={`${base}/memory`}
+          icon={RotateCcw}
         />
         <StatTile
           label="Auto-resolved"
           value={pct(stats.autoResolveRate)}
           sub="blocks later closed by a pass"
           tone="green"
+          icon={CircleCheck}
         />
         <StatTile
           label="p95 gate time"
           value={ms(stats.p95DurationMs)}
           sub="checks + recall + judge"
+          icon={Timer}
         />
       </div>
 
@@ -188,57 +203,53 @@ export default async function OverviewPage({
             </div>
           }
         />
-        {hasTrend ? (
-          <>
-            <VerdictTimeseries data={buckets.points} unit={buckets.unit} />
-            {/* Floating over the plot — the reference-#1 look. Only when
-                there IS a plot to float over. */}
-            <div className="pointer-events-none absolute top-16 right-4 flex w-[220px] flex-col gap-2.5">
-              {overlays.map((o) => (
-                <div key={o.key} className="pointer-events-auto">
-                  {o.node}
+        {/* The overlays used to float ON the plot. That is a dark-world
+            idiom: an opaque white card on a white chart reads as a rendering
+            artifact rather than as depth. Side-by-side works in both worlds,
+            and it converges with the no-trend branch below. */}
+        <div className="grid gap-4 px-5 pb-5 xl:grid-cols-[minmax(0,1fr)_248px]">
+          <div className="min-w-0">
+            {hasTrend ? (
+              <VerdictTimeseries data={buckets.points} unit={buckets.unit} />
+            ) : (
+              <div className="glass-flat flex h-full items-center gap-6 rounded-xl px-5 py-6">
+                <div>
+                  <p className="tnum text-[30px] leading-none font-semibold text-ink">
+                    {stats.total}
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-faint">
+                    runs in a single session
+                  </p>
                 </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="space-y-3 px-5 pb-5">
-            <div className="glass-flat flex items-center gap-6 rounded-xl px-5 py-6">
-              <div>
-                <p className="tnum text-[30px] leading-none text-ink">
-                  {stats.total}
-                </p>
-                <p className="mt-1.5 text-[11px] text-faint">
-                  runs in a single session
-                </p>
-              </div>
-              <div className="h-10 w-px bg-line" />
-              <div className="flex-1">
-                <div className="flex h-2.5 overflow-hidden rounded-full bg-tint-strong">
-                  <div
-                    className="bg-verdict-green"
-                    style={{ width: `${(stats.passed / stats.total) * 100}%` }}
-                  />
-                  <div
-                    className="bg-verdict-red"
-                    style={{ width: `${(stats.blocked / stats.total) * 100}%` }}
-                  />
+                <div className="h-10 w-px bg-line" />
+                <div className="flex-1">
+                  <div className="flex h-2.5 overflow-hidden rounded-full bg-tint-strong">
+                    <div
+                      className="bg-verdict-green"
+                      style={{ width: `${(stats.passed / stats.total) * 100}%` }}
+                    />
+                    <div
+                      className="bg-verdict-red"
+                      style={{ width: `${(stats.blocked / stats.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] text-faint">
+                    {stats.passed} passed · {stats.blocked} blocked — a trend
+                    line needs more than one {buckets.unit} of history.
+                  </p>
                 </div>
-                <p className="mt-2 text-[11px] text-faint">
-                  {stats.passed} passed · {stats.blocked} blocked — a trend line
-                  needs more than one {buckets.unit} of history.
-                </p>
-              </div>
-            </div>
-            {overlays.length > 0 && (
-              <div className="flex flex-wrap gap-2.5">
-                {overlays.map((o) => (
-                  <div key={o.key}>{o.node}</div>
-                ))}
               </div>
             )}
           </div>
-        )}
+
+          {overlays.length > 0 && (
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-1 xl:content-start">
+              {overlays.map((o) => (
+                <div key={o.key}>{o.node}</div>
+              ))}
+            </div>
+          )}
+        </div>
       </GlassPanel>
 
       {/* ── row 3: ranked tables ── */}
@@ -247,6 +258,7 @@ export default async function OverviewPage({
           <PanelHeader
             title="Failure"
             accent="classes"
+          icon={TriangleAlert}
             hint="What actually blocks deploys in this repo."
             right={
               <Link
@@ -279,6 +291,7 @@ export default async function OverviewPage({
           <PanelHeader
             title="Class"
             accent="reliability"
+          icon={RotateCcw}
             hint="Was the block right? Labels you apply train recall ranking."
             right={
               <Link
@@ -325,6 +338,7 @@ export default async function OverviewPage({
         <PanelHeader
           title="Recent"
           accent="traces"
+          icon={ListTree}
           right={
             <Link
               href={`${base}/traces`}
@@ -373,13 +387,15 @@ export default async function OverviewPage({
 
 function PageTitle({ repoSlug }: { repoSlug: string }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 px-1 pt-1">
-      <div>
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Gate <span className="text-amber-ink">Overview</span>
-        </h1>
-        <p className="mt-2 font-mono text-[12px] text-faint">{repoSlug}</p>
-      </div>
-    </div>
+    <PageHeader
+      title="Gate"
+      accent="Overview"
+      sub={
+        <>
+          Every intercepted command in <Mono className="text-body">{repoSlug}</Mono>,
+          with the evidence behind its verdict.
+        </>
+      }
+    />
   );
 }

@@ -4,6 +4,7 @@ import {
   EmptyState,
   GlassPanel,
   Mono,
+  PageHeader,
   PanelHeader,
   pct,
   timeAgo,
@@ -17,14 +18,11 @@ export default async function ReposPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 py-6">
-      <div className="px-1">
-        <h1 className="text-[34px] leading-none font-medium tracking-tight text-ink">
-          Connected <span className="text-amber-ink">repos</span>
-        </h1>
-        <p className="mt-2 text-[13px] text-faint">
-          Every gate run your coding agent triggers, as a trace.
-        </p>
-      </div>
+      <PageHeader
+        title="Connected"
+        accent="repos"
+        sub="Every gate run your coding agent triggers, as a trace."
+      />
 
       <GlassPanel>
         <PanelHeader title="Repos" accent={`(${repos.length})`} />
