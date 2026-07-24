@@ -244,3 +244,153 @@ export const proofFiles = pgTable(
   },
   (table) => [uniqueIndex("proof_files_record_name").on(table.recordPk, table.name)],
 );
+
+// ────────────────────────────────────────────────────────────────────────
+// Intent pillar (P3). The gate records above are only half the story: the
+// checkpoint loop is where the judge actually talks to the coding agent —
+// agent claims done, the reviewer looks at the diff, the user's next
+// message labels whether the work was right. All additive; nothing above
+// this line changed.
+// ────────────────────────────────────────────────────────────────────────
+
+export const checkpoints = pgTable(
+  "checkpoints",
+  {
+    pk: uuid("pk").primaryKey().defaultRandom(),
+    repoPk: uuid("repo_pk")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    checkpointId: text("checkpoint_id").notNull(), // "ckpt_007"
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    sessionId: text("session_id"),
+    event: text("event").notNull(), // stop | commit | manual
+    task: text("task"),
+    branch: text("branch"),
+    headSha: text("head_sha"),
+    digest: text("digest"),
+    changedFiles: text("changed_files").array().notNull().default([]),
+    diffLines: integer("diff_lines").notNull().default(0),
+    // outcome.* — the classifier's verdict on the user's NEXT message
+    outcomeLabel: text("outcome_label"), // corrected | accepted_implicit
+    outcomeCategory: text("outcome_category"),
+    outcomeConfidence: real("outcome_confidence"),
+    outcomeStatement: text("outcome_statement"),
+    classifiedBy: text("classified_by"),
+    reviewModelId: text("review_model_id"),
+    cliVersion: text("cli_version"),
+    schemaVersion: text("schema_version"),
+    data: jsonb("data").notNull(), // full checkpoint record verbatim
+    ingestedAt: timestamp("ingested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("checkpoints_repo_ckpt").on(table.repoPk, table.checkpointId),
+    index("checkpoints_repo_time").on(table.repoPk, table.createdAt.desc()),
+    index("checkpoints_repo_outcome").on(table.repoPk, table.outcomeLabel),
+  ],
+);
+
+/** Mirrors `advisories` so both judgment surfaces unify by signature. */
+export const intentFindings = pgTable(
+  "intent_findings",
+  {
+    pk: uuid("pk").primaryKey().defaultRandom(),
+    checkpointPk: uuid("checkpoint_pk")
+      .notNull()
+      .references(() => checkpoints.pk, { onDelete: "cascade" }),
+    repoPk: uuid("repo_pk")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    checkpointId: text("checkpoint_id").notNull(),
+    idx: integer("idx").notNull(), // ref = `${checkpointId}#${idx}`
+    concern: text("concern").notNull(),
+    kind: text("kind").notNull().default("intent"),
+    tier: integer("tier"),
+    confidence: real("confidence"),
+    target: text("target"),
+    delivery: text("delivery").notNull(), // staged | recorded | sent
+    label: text("label"), // null | confirmed | rejected
+    signature: text("signature").notNull(), // same advisorySignature() as gate
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("intent_findings_ckpt_idx").on(table.checkpointPk, table.idx),
+    index("intent_findings_repo_sig").on(table.repoPk, table.signature),
+  ],
+);
+
+/**
+ * Learned preferences. Repo-scope rows hang off a repo; user-scope rows are
+ * shared across a machine's repos, so uniqueness is scoped by two PARTIAL
+ * indexes rather than one composite (same shape as device_codes' partial
+ * unique on pending user codes).
+ */
+export const preferences = pgTable(
+  "preferences",
+  {
+    pk: uuid("pk").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    repoPk: uuid("repo_pk").references(() => repos.id, { onDelete: "cascade" }),
+    prefId: text("pref_id").notNull(), // "pref_001"
+    scope: text("scope").notNull(), // repo | user
+    statement: text("statement").notNull(),
+    category: text("category"),
+    status: text("status").notNull(), // candidate | active | rejected
+    evidence: text("evidence").array().notNull().default([]), // ckpt ids
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("preferences_repo_pref")
+      .on(table.repoPk, table.prefId)
+      .where(sql`scope = 'repo'`),
+    uniqueIndex("preferences_user_pref")
+      .on(table.userId, table.prefId)
+      .where(sql`scope = 'user'`),
+    index("preferences_repo_status").on(table.repoPk, table.status),
+  ],
+);
+
+/** One row per LLM call, from the CLI's ledger.jsonl (seq = line number). */
+export const ledgerEntries = pgTable(
+  "ledger_entries",
+  {
+    pk: uuid("pk").primaryKey().defaultRandom(),
+    repoPk: uuid("repo_pk")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    ts: timestamp("ts", { withTimezone: true }).notNull(),
+    model: text("model").notNull(),
+    costUsd: real("cost_usd").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("ledger_repo_seq").on(table.repoPk, table.seq),
+    index("ledger_repo_model").on(table.repoPk, table.model),
+  ],
+);
+
+/**
+ * The repo's reported .proofjury.toml. `effectiveHash` is the CLI's sha256
+ * of the file bytes and is the optimistic-concurrency base for config
+ * patches; `conflicts` carries patches the CLI refused to apply because
+ * the local file had moved on.
+ */
+export const repoConfigs = pgTable("repo_configs", {
+  repoPk: uuid("repo_pk")
+    .primaryKey()
+    .references(() => repos.id, { onDelete: "cascade" }),
+  effective: jsonb("effective").notNull(),
+  effectiveHash: text("effective_hash").notNull().default(""),
+  capabilities: jsonb("capabilities").notNull().default({}),
+  conflicts: jsonb("conflicts").notNull().default([]),
+  reportedAt: timestamp("reported_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

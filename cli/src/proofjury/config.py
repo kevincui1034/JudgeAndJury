@@ -205,6 +205,12 @@ def resolve_sync(env: Mapping[str, str] | None = None) -> dict | None:
         "token": token,
         "token_id": table.get("token_id", ""),
         "endpoint": str(endpoint).rstrip("/"),
+        # Intent-pillar opt-outs. Both default ON so an existing [sync]
+        # table keeps its current behavior; `intent = false` stops
+        # checkpoints/prefs/ledger uploading at all, and
+        # `checkpoint_diff = false` keeps them but strips the diff text.
+        "intent": table.get("intent") is not False,
+        "checkpoint_diff": table.get("checkpoint_diff") is not False,
     }
 
 

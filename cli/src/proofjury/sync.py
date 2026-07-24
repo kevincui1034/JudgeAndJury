@@ -115,6 +115,19 @@ class SyncClient:
             response.raise_for_status()
             return response.json()
 
+    def push_intent(self, repo_id: str, payload: dict) -> dict:
+        """One round trip for the whole intent pillar (checkpoints, prefs,
+        ledger, reported config). Batched deliberately: checkpoints are
+        high-volume and the rest are tiny, and this runs post-gate where
+        every extra request is latency the user feels."""
+        with self._client() as client:
+            response = client.post(
+                f"{self.endpoint}/intent",
+                json={"repo_id": repo_id, **payload},
+            )
+            response.raise_for_status()
+            return response.json()
+
     def pull_labels(self, repo_id: str, cursor: int) -> dict:
         with self._client() as client:
             response = client.get(
@@ -142,10 +155,26 @@ def load_state(proof_root: Path) -> dict:
         data = json.loads(state_path(proof_root).read_text(encoding="utf-8"))
         if isinstance(data, dict) and isinstance(data.get("records"), dict):
             data.setdefault("label_cursor", 0)
+            # Intent-pillar keys are setdefault-ed rather than required, so a
+            # sync.json written before intent sync existed keeps working.
+            data.setdefault("checkpoints", {})
+            data.setdefault("prefs", {})
+            data.setdefault("ledger_line", 0)
+            data.setdefault("config_hash", "")
+            data.setdefault("config_conflicts", [])
             return data
     except (OSError, json.JSONDecodeError, ValueError):
         pass
-    return {"version": STATE_VERSION, "records": {}, "label_cursor": 0}
+    return {
+        "version": STATE_VERSION,
+        "records": {},
+        "label_cursor": 0,
+        "checkpoints": {},
+        "prefs": {},
+        "ledger_line": 0,
+        "config_hash": "",
+        "config_conflicts": [],
+    }
 
 def save_state(proof_root: Path, state: dict) -> None:
     _atomic_write(state_path(proof_root), json.dumps(state, ensure_ascii=False))
@@ -255,6 +284,196 @@ def pull_labels_and_apply(
     return applied
 
 
+# ---------------------------------------------------------- intent drain
+
+
+#: Bounded post-gate work, like AUTO_DRAIN_LIMIT for records.
+INTENT_DRAIN_LIMIT = 10
+
+
+def _checkpoint_payload(record: dict, include_diff: bool) -> dict:
+    """A checkpoint as sent. Everything here was scrubbed at write time by
+    checkpoint.py; ``include_diff`` is the ``[sync] checkpoint_diff = false``
+    opt-out for repos that would rather not upload diff text at all."""
+    payload = dict(record)
+    if not include_diff:
+        payload.pop("diff_excerpt", None)
+        payload.pop("checkpoint_input", None)
+        payload.pop("checkpoint_output", None)
+    return payload
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    out: list[dict] = []
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    parsed = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed, dict):
+                    out.append(parsed)
+    except OSError:
+        pass
+    return out
+
+
+def _config_block(root: Path, state: dict) -> dict | None:
+    """The repo's .proofjury.toml as the dashboard should see it — only
+    when its bytes changed since the last push."""
+    path = Path(root) / ".proofjury.toml"
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest == state.get("config_hash"):
+        return None
+    try:
+        import tomllib
+
+        effective = tomllib.loads(raw.decode("utf-8"))
+    except Exception:
+        effective = {}
+    return {
+        "hash": digest,
+        "effective": effective,
+        "conflicts": list(state.get("config_conflicts") or []),
+    }
+
+
+def _capabilities(root: Path, env: Mapping[str, str]) -> dict:
+    """Which optional surfaces are actually live on this machine. Names and
+    booleans only — never a secret, never a key."""
+    from . import config as config_module
+
+    repo_config = {}
+    try:
+        from .context import load_config
+
+        repo_config = load_config(Path(root))
+    except Exception:
+        pass
+    resolved = None
+    try:
+        resolved = config_module.resolve_judge(env)
+    except Exception:
+        pass
+    return {
+        "judge_provider": (resolved or {}).get("provider"),
+        "judge_model": (resolved or {}).get("model"),
+        "semantic": bool(config_module.semantic_enabled(repo_config, env)),
+        "conventions": bool(config_module.conventions_enabled(repo_config, env)),
+        "checkpoints": bool(config_module.checkpoints_enabled(repo_config, env)),
+        "browser_qa": bool((repo_config.get("commands") or {}).get("qa")),
+    }
+
+
+def drain_intent(
+    root: Path,
+    client: SyncClient,
+    repo_id: str,
+    env: Mapping[str, str],
+    limit: int | None = INTENT_DRAIN_LIMIT,
+    include_diff: bool = True,
+) -> int:
+    """Push changed checkpoints, prefs, new ledger lines and the reported
+    config. Content-hashed exactly like records, so a re-push only happens
+    when something actually changed. Returns the checkpoint count sent."""
+    proof_root = Path(root) / ".proofjury"
+    state = load_state(proof_root)
+
+    known_ckpt = state.get("checkpoints") or {}
+    pending: list[dict] = []
+    for record in _read_jsonl(proof_root / "checkpoints.jsonl"):
+        ckpt_id = record.get("id")
+        if not ckpt_id:
+            continue
+        payload = _checkpoint_payload(record, include_diff)
+        digest = record_hash(payload)
+        if known_ckpt.get(ckpt_id) == digest:
+            continue
+        pending.append(payload)
+        if limit is not None and len(pending) >= limit:
+            break
+
+    known_prefs = state.get("prefs") or {}
+    prefs: list[dict] = []
+    for scope, path in (
+        ("repo", proof_root / "preferences.jsonl"),
+        ("user", _user_prefs_path(env)),
+    ):
+        if path is None:
+            continue
+        for record in _read_jsonl(path):
+            if not record.get("id"):
+                continue
+            entry = {**record, "scope": record.get("scope") or scope}
+            key = f"{entry['scope']}:{entry['id']}"
+            digest = record_hash(entry)
+            if known_prefs.get(key) == digest:
+                continue
+            prefs.append(entry)
+
+    ledger_line = int(state.get("ledger_line") or 0)
+    ledger: list[dict] = []
+    all_ledger = _read_jsonl(proof_root / "ledger.jsonl")
+    for seq, entry in enumerate(all_ledger):
+        if seq < ledger_line:
+            continue
+        ledger.append(
+            {
+                "seq": seq,
+                "ts": entry.get("ts", ""),
+                "model": entry.get("model", ""),
+                "cost_usd": float(entry.get("cost_usd") or 0.0),
+            }
+        )
+
+    config_block = _config_block(root, state)
+
+    if not pending and not prefs and not ledger and config_block is None:
+        return 0
+
+    payload: dict = {
+        "checkpoints": pending,
+        "prefs": prefs,
+        "ledger": ledger,
+        "capabilities": _capabilities(root, env),
+    }
+    if config_block is not None:
+        payload["config"] = {**config_block, "capabilities": payload["capabilities"]}
+
+    client.push_intent(repo_id, payload)
+
+    # Only record success after the server accepted the batch.
+    for entry in pending:
+        known_ckpt[entry["id"]] = record_hash(entry)
+    for entry in prefs:
+        known_prefs[f"{entry['scope']}:{entry['id']}"] = record_hash(entry)
+    state["checkpoints"] = known_ckpt
+    state["prefs"] = known_prefs
+    state["ledger_line"] = len(all_ledger)
+    if config_block is not None:
+        state["config_hash"] = config_block["hash"]
+        state["config_conflicts"] = []
+    save_state(proof_root, state)
+    return len(pending)
+
+
+def _user_prefs_path(env: Mapping[str, str]) -> Path | None:
+    try:
+        from .memory import prefs as prefs_module
+
+        return prefs_module.user_store(env).path
+    except Exception:
+        return None
+
+
 def repo_id_of(store: MemoryStore) -> str | None:
     """The repo identity the gate persisted (no duplicated derivation)."""
     try:
@@ -294,5 +513,17 @@ def sync_after_gate(root: Path, env: Mapping[str, str]) -> None:
         except Exception:
             pass  # pull failure must not stop the push
         drain(store, client, repo_id, limit=AUTO_DRAIN_LIMIT)
+        if settings.get("intent", True):
+            # Inside the SAME outer firewall — the bounded work grows, the
+            # invariant (exit code and stdout byte-identical whether sync is
+            # on, off, or broken) does not.
+            drain_intent(
+                root,
+                client,
+                repo_id,
+                env,
+                limit=INTENT_DRAIN_LIMIT,
+                include_diff=settings.get("checkpoint_diff", True),
+            )
     except Exception:
         pass

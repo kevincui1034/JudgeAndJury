@@ -30,7 +30,25 @@ def test_save_and_resolve_roundtrip(env):
         "token": "pjt_secret123",
         "token_id": "tok-id-1",
         "endpoint": DEFAULT_SYNC_ENDPOINT.rstrip("/"),
+        # Intent-pillar opt-outs default ON so an existing [sync] table
+        # keeps its behavior.
+        "intent": True,
+        "checkpoint_diff": True,
     }
+    assert sync_enabled(env)
+
+
+def test_intent_optouts_are_honored(env):
+    save_sync_config("pjt_x", "t", env=env)
+    path = config_path(env)
+    path.write_text(
+        path.read_text(encoding="utf-8") + "intent = false\ncheckpoint_diff = false\n",
+        encoding="utf-8",
+    )
+    settings = resolve_sync(env)
+    assert settings["intent"] is False
+    assert settings["checkpoint_diff"] is False
+    # Turning intent sync off must NOT turn record sync off.
     assert sync_enabled(env)
 
 

@@ -11,10 +11,46 @@ import { mintToken } from "@/lib/tokens";
 
 export async function truncateAll(): Promise<void> {
   await db.execute(sql`
-    TRUNCATE TABLE label_events, proof_files, advisories, records, repos,
-      device_tokens, device_codes, sessions, accounts, users
+    TRUNCATE TABLE label_events, proof_files, advisories, records,
+      intent_findings, checkpoints, preferences, ledger_entries, repo_configs,
+      repos, device_tokens, device_codes, sessions, accounts, users
     RESTART IDENTITY CASCADE
   `);
+}
+
+/** A realistic checkpoint, shaped like cli/checkpoint.py's record dict. */
+export function sampleCheckpoint(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: "ckpt_001",
+    created_at: "2026-07-18T12:05:00Z",
+    repo_id: "demo-app",
+    session_id: "sess-1",
+    event: "stop",
+    task: "add refunds to payments",
+    branch: "main",
+    head_sha: "abc1234",
+    digest: "d1",
+    changed_files: ["payments.py"],
+    diff_lines: 12,
+    diff_excerpt: "+ def refund(): ...",
+    outcome: {
+      label: "corrected",
+      statement: "wants large files split into small modules",
+      category: "size",
+      confidence: 0.9,
+      classified_by: "pioneer/gpt-4.1",
+      at: "2026-07-18T12:06:00Z",
+    },
+    findings: [],
+    checkpoint_input: "REVIEW PROMPT",
+    checkpoint_output: "{}",
+    review_model_id: "pioneer/qwen3-32b",
+    schema_version: "1",
+    cli_version: "0.1.0",
+    ...overrides,
+  };
 }
 
 export async function makeUser(login = "dev"): Promise<string> {

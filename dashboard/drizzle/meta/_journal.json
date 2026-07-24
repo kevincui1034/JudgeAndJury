@@ -8,6 +8,13 @@
       "when": 1784385888256,
       "tag": "0000_tough_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784927624990,
+      "tag": "0001_red_colleen_wing",
+      "breakpoints": true
     }
   ]
 }
