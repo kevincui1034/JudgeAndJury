@@ -9,17 +9,24 @@ dataset.
 """
 
 import json
+from pathlib import Path
 
+import httpx
 from typer.testing import CliRunner
 
 from proofjury.checkpoint import CheckpointStore
 from proofjury.cli import app
 from proofjury.judge.advisory import ADVISORY_SYSTEM_PROMPT
 from proofjury.memory.finetune import (
+    BASELINE_MODELS_PATH,
+    TRAINING_JOBS_PATH,
+    UPLOAD_PROCESS_PATH,
+    UPLOAD_URL_PATH,
     advisory_pairs,
     build_dataset,
     checkpoint_pairs,
     dataset_stats,
+    list_base_models,
     submit,
     write_jsonl,
 )
@@ -244,50 +251,178 @@ def test_write_jsonl_emits_messages_only(tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_submit_posts_with_api_key_and_returns_job_ref(tmp_path):
-    dataset = tmp_path / "ft.jsonl"
-    dataset.write_text('{"messages": []}\n', encoding="utf-8")
-    seen = {}
-
-    def poster(url, headers, payload):
-        seen.update(url=url, headers=headers, payload=payload)
-        return {"job_id": "job_abc123"}
-
-    ref = submit(dataset, {"PIONEER_API_KEY": "pk-1"}, poster=poster)
-    assert ref == "job_abc123"
-    assert seen["headers"]["X-API-Key"] == "pk-1"
-    assert seen["payload"]["method"] == "sft"
-    assert '{"messages": []}' in seen["payload"]["training_file"]
+def _dataset(tmp_path) -> Path:
+    path = tmp_path / "ft.jsonl"
+    path.write_text('{"messages": []}\n', encoding="utf-8")
+    return path
 
 
-def test_submit_without_key_returns_none(tmp_path):
-    dataset = tmp_path / "ft.jsonl"
-    dataset.write_text("{}\n", encoding="utf-8")
-    called = []
-    assert submit(dataset, {}, poster=lambda *a: called.append(a)) is None
-    assert called == []
+def _recorder(overrides=None):
+    """Fake transport that records every call and replays the real
+    three-step upload → process → train handshake."""
+    calls: list[dict] = []
+    replies = {
+        UPLOAD_URL_PATH: {
+            "presigned_url": "https://storage.example/put/abc?sig=1",
+            "dataset_id": "ds_123",
+            "dataset_name": "proofjury-demo",
+            "version_number": 1,
+        },
+        UPLOAD_PROCESS_PATH: {"id": "ds_123", "status": "processing"},
+        TRAINING_JOBS_PATH: {"id": "job_abc123"},
+    }
+    replies.update(overrides or {})
+
+    def request(method, url, headers, json=None, content=None):
+        calls.append(
+            {"method": method, "url": url, "headers": headers, "json": json, "content": content}
+        )
+        for path, reply in replies.items():
+            if url.endswith(path):
+                if isinstance(reply, Exception):
+                    raise reply
+                return reply
+        return {}
+
+    return request, calls
 
 
-def test_submit_is_firewalled_against_api_errors(tmp_path):
-    dataset = tmp_path / "ft.jsonl"
-    dataset.write_text("{}\n", encoding="utf-8")
-
-    def boom(url, headers, payload):
-        raise RuntimeError("500")
-
-    assert submit(dataset, {"PIONEER_API_KEY": "pk-1"}, poster=boom) is None
-
-
-def test_submit_url_is_env_overridable(tmp_path):
-    dataset = tmp_path / "ft.jsonl"
-    dataset.write_text("{}\n", encoding="utf-8")
-    seen = {}
-    submit(
-        dataset,
-        {"PIONEER_API_KEY": "k", "PIONEER_TRAINING_URL": "http://127.0.0.1:9/train"},
-        poster=lambda url, h, p: seen.update(url=url) or {"id": "job_x"},
+def test_submit_uploads_then_trains_and_returns_the_job_ref(tmp_path):
+    """The API takes dataset REFERENCES, so a submit is three calls:
+    reserve a presigned URL, PUT the bytes, ingest — then train."""
+    request, calls = _recorder()
+    result = submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "pk-1"},
+        base_model="qwen3-8b",
+        model_name="proofjury-demo",
+        requester=request,
     )
-    assert seen["url"] == "http://127.0.0.1:9/train"
+
+    assert result.job_ref == "job_abc123"
+    assert result.error is None
+    assert [c["method"] for c in calls] == ["POST", "PUT", "POST", "POST"]
+
+    reserve, put, process, train = calls
+    # No /v1 anywhere — /v1/felix/training-jobs is a 404 on the live API.
+    assert "/v1/" not in train["url"]
+    assert train["url"].endswith("/felix/training-jobs")
+    assert reserve["json"]["type"] == "training"  # 'evaluation' is not trainable
+    # The PUT goes to object storage: signed URL is the auth, no API key.
+    assert put["url"].startswith("https://storage.example/")
+    assert "X-API-Key" not in put["headers"]
+    assert put["content"] == b'{"messages": []}\n'
+    assert process["json"] == {"dataset_id": "ds_123"}
+    # Exactly the fields the API marks required, under their real names.
+    assert train["json"]["model_name"] == "proofjury-demo"
+    assert train["json"]["base_model"] == "qwen3-8b"
+    assert train["json"]["datasets"] == [{"name": "proofjury-demo", "version": "1"}]
+    assert train["json"]["training_algorithm"] == "sft"
+    assert "training_file" not in train["json"]  # the old, 404-ing shape
+    assert train["headers"]["X-API-Key"] == "pk-1"
+
+
+def test_submit_without_key_calls_nothing(tmp_path):
+    request, calls = _recorder()
+    result = submit(
+        _dataset(tmp_path), {}, base_model="qwen3-8b", model_name="n", requester=request
+    )
+    assert result.job_ref is None
+    assert "PIONEER_API_KEY" in result.error
+    assert calls == []
+
+
+def test_submit_without_a_base_model_does_not_call_the_api(tmp_path):
+    """base_model is required by the API; silently omitting it produced a
+    422 that read like an auth problem."""
+    request, calls = _recorder()
+    result = submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "pk-1"},
+        base_model="",
+        model_name="n",
+        requester=request,
+    )
+    assert result.job_ref is None
+    assert "--base-model" in result.error
+    assert calls == []
+
+
+def test_a_failed_submit_names_the_failing_call(tmp_path):
+    """The whole point of the rewrite: a wrong URL must not read as a bad
+    key. The error has to say which step failed and what came back."""
+    boom = httpx.HTTPStatusError(
+        "404",
+        request=httpx.Request("POST", "https://api.pioneer.ai/felix/training-jobs"),
+        response=httpx.Response(404, text='{"detail":"Not Found"}'),
+    )
+    request, _ = _recorder({TRAINING_JOBS_PATH: boom})
+    result = submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "pk-1"},
+        base_model="qwen3-8b",
+        model_name="n",
+        requester=request,
+    )
+    assert result.job_ref is None
+    assert "training job failed" in result.error
+    assert "404" in result.error and "Not Found" in result.error
+    # The dataset survived the failure — it is not lost with the job.
+    assert result.dataset["name"] == "proofjury-demo"
+
+
+def test_an_upload_failure_is_reported_as_an_upload_failure(tmp_path):
+    request, calls = _recorder({UPLOAD_URL_PATH: RuntimeError("boom")})
+    result = submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "pk-1"},
+        base_model="qwen3-8b",
+        model_name="n",
+        requester=request,
+    )
+    assert "dataset upload failed" in result.error
+    # It must not go on to train against a dataset that was never stored.
+    assert len(calls) == 1
+
+
+def test_submit_never_raises_on_a_broken_transport(tmp_path):
+    def explode(*args, **kwargs):
+        raise RuntimeError("network gone")
+
+    result = submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "pk-1"},
+        base_model="qwen3-8b",
+        model_name="n",
+        requester=explode,
+    )
+    assert result.job_ref is None and result.error
+
+
+def test_api_base_is_env_overridable(tmp_path):
+    request, calls = _recorder()
+    submit(
+        _dataset(tmp_path),
+        {"PIONEER_API_KEY": "k", "PIONEER_API_BASE": "http://127.0.0.1:9931"},
+        base_model="qwen3-8b",
+        model_name="n",
+        requester=request,
+    )
+    assert calls[0]["url"] == "http://127.0.0.1:9931/felix/datasets/upload/url"
+    assert calls[-1]["url"] == "http://127.0.0.1:9931/felix/training-jobs"
+
+
+def test_list_base_models_unwraps_and_survives_failure():
+    request, _ = _recorder({BASELINE_MODELS_PATH: {"data": [{"id": "qwen3-8b"}]}})
+    assert list_base_models({"PIONEER_API_KEY": "k"}, requester=request) == [
+        {"id": "qwen3-8b"}
+    ]
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("down")
+
+    assert list_base_models({"PIONEER_API_KEY": "k"}, requester=boom) == []
+    assert list_base_models({}, requester=request) == []
 
 
 # --------------------------------------------------------------------------

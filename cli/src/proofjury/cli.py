@@ -814,7 +814,13 @@ def memory_finetune(
         None, "-o", "--output", help="Where to write the dataset JSONL."
     ),
     base_model: str = typer.Option(
-        None, "--base-model", help="Base model to tune (provider default if unset)."
+        None, "--base-model", help="Base model to tune (see --list-base-models)."
+    ),
+    model_name: str = typer.Option(
+        None, "--model-name", help="Name for the trained model (default: proofjury-<repo>)."
+    ),
+    list_base_models_flag: bool = typer.Option(
+        False, "--list-base-models", help="List the base models this account may tune."
     ),
 ) -> None:
     """Fine-tune the judge on this repo's own labeled records.
@@ -830,12 +836,35 @@ def memory_finetune(
         PIONEER_DOCS_URL,
         build_dataset,
         dataset_stats,
+        list_base_models,
         submit,
         write_jsonl,
     )
 
     console = Console(highlight=False)
     root = Path.cwd()
+
+    if list_base_models_flag:
+        models = list_base_models(os.environ)
+        if not models:
+            _fail(
+                "could not list base models — check PIONEER_API_KEY and that the "
+                "account has access to training",
+                1,
+            )
+            return  # unreachable
+        table = Table(title="Pioneer base models", box=box.SIMPLE_HEAD)
+        table.add_column("id", style="bold")
+        table.add_column("description")
+        for entry in models:
+            table.add_row(
+                str(entry.get("id") or entry.get("name") or "?"),
+                str(entry.get("description") or ""),
+            )
+        console.print(table)
+        console.print("\nTune one with: proofjury memory finetune --base-model <id>")
+        return
+
     rows = build_dataset(_store(), get_ckpt_store(root))
     if not rows:
         _fail(
@@ -862,19 +891,30 @@ def memory_finetune(
         console.print("[dim]--dry-run: nothing submitted[/dim]")
         return
 
-    job_ref = submit(path, os.environ, base_model=base_model)
-    if job_ref is None:
+    if not base_model:
         _fail(
-            "could not start the fine-tune (no PIONEER_API_KEY, or the API "
-            f"call failed) — the dataset is still at {path}",
+            "a base model is required — run `proofjury memory finetune "
+            f"--list-base-models` to see the options. The dataset is at {path}",
             1,
         )
         return  # unreachable
-    console.print(f"✓ fine-tune job started: [bold]{job_ref}[/bold]")
+
+    from .sync import repo_id_of
+
+    name = model_name or f"proofjury-{repo_id_of(_store()) or root.name}"
+    result = submit(path, os.environ, base_model=base_model, model_name=name)
+    if result.job_ref is None:
+        # Name the actual fault: a wrong URL used to read as a bad key.
+        _fail(f"{result.error} — the dataset is still at {path}", 1)
+        return  # unreachable
+    if result.dataset:
+        console.print(f"✓ dataset registered: [bold]{result.dataset['name']}[/bold]")
+    console.print(f"✓ fine-tune job started: [bold]{result.job_ref}[/bold]")
     console.print(f"  track it at {PIONEER_DOCS_URL}")
     console.print(
-        "  when it completes, point [bold][advisory].model[/bold] / "
-        "[bold][checkpoint].model[/bold] at the job id to run the tuned judge"
+        "  when it completes, deploy the trained checkpoint and point "
+        "[bold][advisory].model[/bold] / [bold][checkpoint].model[/bold] at the "
+        "deployed model id to run the tuned judge"
     )
 
 

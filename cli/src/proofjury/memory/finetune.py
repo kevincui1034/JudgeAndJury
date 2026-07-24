@@ -28,6 +28,7 @@ that is not part of the persisted schema.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -38,11 +39,27 @@ from ..judge.intent import REVIEW_SYSTEM_PROMPT
 from .schema import MemoryRecord
 
 TIMEOUT_SECONDS = 30.0
+UPLOAD_TIMEOUT_SECONDS = 120.0  # a dataset PUT is a body, not a control call
 
-#: Pioneer's training API (PLAN-swarmhack H2). Overridable with
-#: PIONEER_TRAINING_URL — confirm against the live account at H0.
-PIONEER_TRAINING_URL = "https://api.pioneer.ai/v1/felix/training-jobs"
+#: Pioneer's API root. Note there is NO ``/v1`` on the training surface —
+#: ``/v1/felix/training-jobs`` 404s, ``/felix/training-jobs`` is the real
+#: route (confirmed against the live account's ``/openapi.json``).
+#: Overridable with PIONEER_API_BASE for a mock server in tests.
+PIONEER_API_BASE = "https://api.pioneer.ai"
 PIONEER_DOCS_URL = "https://docs.pioneer.ai/"
+
+#: Training happens in three calls, not one: reserve a presigned URL, PUT
+#: the file to it, then ask the API to ingest it. Only then can a job
+#: reference the dataset BY NAME — the training endpoint takes dataset
+#: references, never inline file content.
+UPLOAD_URL_PATH = "/felix/datasets/upload/url"
+UPLOAD_PROCESS_PATH = "/felix/datasets/upload/process"
+TRAINING_JOBS_PATH = "/felix/training-jobs"
+BASELINE_MODELS_PATH = "/felix/baseline-models"
+
+#: ``training_algorithm`` on the wire. 'grpo'/'dpo' also exist but need
+#: preference data this dataset does not carry.
+TRAINING_ALGORITHM = "sft"
 
 #: Human verdicts on an advisory finding. Anything else (None) means the
 #: finding was never reviewed and carries no training signal.
@@ -173,45 +190,180 @@ def write_jsonl(rows: list[dict], path: Path) -> Path:
     return path
 
 
+@dataclass
+class SubmitResult:
+    """Outcome of a submit attempt.
+
+    ``error`` exists because the old contract — return None on any
+    failure — made a wrong URL indistinguishable from a bad key, and the
+    CLI then blamed the key. Every failure now says which of the three
+    calls failed and why.
+    """
+
+    job_ref: str | None = None
+    dataset: dict | None = None
+    error: str | None = None
+
+
+class _ApiError(Exception):
+    """Internal: carries a human-readable reason to the SubmitResult."""
+
+
+def _base(env: Mapping[str, str]) -> str:
+    return (env.get("PIONEER_API_BASE") or PIONEER_API_BASE).rstrip("/")
+
+
+def _headers(api_key: str) -> dict:
+    return {"X-API-Key": api_key, "Content-Type": "application/json"}
+
+
+def _request(method: str, url: str, headers: dict, *, json=None, content=None) -> object:
+    timeout = UPLOAD_TIMEOUT_SECONDS if content is not None else TIMEOUT_SECONDS
+    with httpx.Client(timeout=timeout) as client:
+        response = client.request(method, url, headers=headers, json=json, content=content)
+        response.raise_for_status()
+        if not response.content:
+            return {}
+        try:
+            return response.json()
+        except ValueError:
+            return {}
+
+
+def list_base_models(env: Mapping[str, str], *, requester=None) -> list[dict]:
+    """Base models this account may tune. Empty list on any failure —
+    listing options must never be the thing that breaks the command."""
+    api_key = env.get("PIONEER_API_KEY")
+    if not api_key:
+        return []
+    try:
+        data = (requester or _request)(
+            "GET", _base(env) + BASELINE_MODELS_PATH, _headers(api_key)
+        )
+    except Exception:
+        return []
+    if isinstance(data, dict):
+        data = data.get("data") or data.get("models") or data.get("baseline_models") or []
+    return [m for m in data if isinstance(m, dict)] if isinstance(data, list) else []
+
+
+def upload_dataset(
+    dataset_path: Path,
+    env: Mapping[str, str],
+    *,
+    dataset_name: str,
+    requester=None,
+) -> dict:
+    """Register ``dataset_path`` with Pioneer; return a DatasetReference.
+
+    Three calls, because the training endpoint takes references rather
+    than file content: reserve a presigned URL, PUT the bytes to it, then
+    ask the API to ingest what landed. The PUT goes to object storage, so
+    it carries no API key — signing the URL IS the authorization.
+    """
+    api_key = env.get("PIONEER_API_KEY")
+    if not api_key:
+        raise _ApiError("no PIONEER_API_KEY configured")
+    call = requester or _request
+    base = _base(env)
+    path = Path(dataset_path)
+
+    reserved = call(
+        "POST",
+        base + UPLOAD_URL_PATH,
+        _headers(api_key),
+        json={
+            "dataset_name": dataset_name,
+            "format": "jsonl",
+            "filename": path.name,
+            "type": "training",  # 'evaluation' datasets are not trainable
+            "generation_type": "upload",
+            "visibility": "private",
+        },
+    )
+    if not isinstance(reserved, dict):
+        raise _ApiError(f"unexpected reply from {UPLOAD_URL_PATH}")
+    presigned = reserved.get("presigned_url")
+    dataset_id = reserved.get("dataset_id")
+    if not presigned or not dataset_id:
+        raise _ApiError(f"{UPLOAD_URL_PATH} returned no presigned_url/dataset_id")
+
+    call(
+        "PUT",
+        presigned,
+        {"Content-Type": "application/octet-stream"},
+        content=path.read_bytes(),
+    )
+    call("POST", base + UPLOAD_PROCESS_PATH, _headers(api_key), json={"dataset_id": dataset_id})
+
+    return {
+        "name": reserved.get("dataset_name") or dataset_name,
+        "version": reserved.get("version_number"),
+        "dataset_id": dataset_id,
+    }
+
+
 def submit(
     dataset_path: Path,
     env: Mapping[str, str],
     *,
-    base_model: str | None = None,
-    poster=None,
-) -> str | None:
-    """Start a Pioneer fine-tune from ``dataset_path``; return the job ref.
+    base_model: str,
+    model_name: str,
+    requester=None,
+) -> SubmitResult:
+    """Upload ``dataset_path`` and start a Pioneer fine-tune on it.
 
-    Returns None when no key is configured or the call fails — a failed
-    submit must never take a CLI process down with a traceback. ``poster``
-    is the injection point used by tests.
+    ``base_model`` and ``model_name`` are required by the API, so they are
+    required here too rather than being silently dropped from the payload.
+    Never raises — a failed submit reports through ``SubmitResult.error``
+    so the dataset the user just built is never lost to a traceback.
     """
-    api_key = env.get("PIONEER_API_KEY")
-    if not api_key:
-        return None
-    url = env.get("PIONEER_TRAINING_URL") or PIONEER_TRAINING_URL
-    payload = {
-        "training_file": Path(dataset_path).read_text(encoding="utf-8"),
-        "method": "sft",
-    }
-    if base_model:
-        payload["base_model"] = base_model
-    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    if not env.get("PIONEER_API_KEY"):
+        return SubmitResult(error="no PIONEER_API_KEY configured")
+    if not base_model:
+        return SubmitResult(error="a base model is required (--base-model)")
+
+    call = requester or _request
     try:
-        data = (poster or _post)(url, headers, payload)
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    for key in ("job_id", "id", "training_job_id", "job"):
-        value = data.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
+        dataset = upload_dataset(
+            dataset_path, env, dataset_name=model_name, requester=requester
+        )
+    except Exception as exc:
+        return SubmitResult(error=f"dataset upload failed: {_reason(exc)}")
+
+    reference = {"name": dataset["name"]}
+    if dataset.get("version") is not None:
+        reference["version"] = str(dataset["version"])
+    url = env.get("PIONEER_TRAINING_URL") or _base(env) + TRAINING_JOBS_PATH
+    try:
+        data = call(
+            "POST",
+            url,
+            _headers(env["PIONEER_API_KEY"]),
+            json={
+                "model_name": model_name,
+                "datasets": [reference],
+                "base_model": base_model,
+                "training_algorithm": TRAINING_ALGORITHM,
+            },
+        )
+    except Exception as exc:
+        return SubmitResult(dataset=dataset, error=f"training job failed: {_reason(exc)}")
+
+    if isinstance(data, dict):
+        for key in ("job_id", "id", "training_job_id", "job"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return SubmitResult(job_ref=value, dataset=dataset)
+    return SubmitResult(
+        dataset=dataset, error="training job accepted but returned no job id"
+    )
 
 
-def _post(url: str, headers: dict, payload: dict) -> object:
-    with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
-        response = client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+def _reason(exc: Exception) -> str:
+    """A message that names the actual fault — an HTTP status and body
+    beat 'could not start the fine-tune'."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        body = (exc.response.text or "").strip()[:200]
+        return f"HTTP {exc.response.status_code} from {exc.request.url}: {body}"
+    return f"{type(exc).__name__}: {exc}"
