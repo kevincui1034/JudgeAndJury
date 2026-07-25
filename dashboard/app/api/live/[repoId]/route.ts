@@ -31,7 +31,7 @@ export async function GET(
       (SELECT extract(epoch FROM max(ingested_at))::bigint FROM checkpoints c
         JOIN repos ON repos.id = c.repo_pk
         WHERE c.repo_pk = ${repoId} AND repos.user_id = ${session.user.id}) AS checkpoints,
-      (SELECT max(id)::bigint FROM label_events e
+      (SELECT max(e.id)::bigint FROM label_events e
         JOIN repos ON repos.id = e.repo_pk
         WHERE e.repo_pk = ${repoId} AND repos.user_id = ${session.user.id}) AS events
   `);
