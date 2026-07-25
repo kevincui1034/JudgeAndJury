@@ -63,7 +63,7 @@ export function Wordmark({ className }: { className?: string }) {
         className,
       )}
     >
-      Proofjury
+      Judge &amp; Jury
     </span>
   );
 }

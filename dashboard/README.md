@@ -1,4 +1,4 @@
-# Proofjury dashboard — app.proofjury.com
+# Judge & Jury dashboard — app.proofjury.com
 
 Every gate run as a trace: the verdict, the evidence, the blast radius of
 the change, and everything the judge has advised your coding agent — kept

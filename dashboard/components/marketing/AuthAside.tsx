@@ -17,7 +17,7 @@ export function AuthAside() {
           before production.
         </p>
         <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-body">
-          Proofjury intercepts the deploy itself. Deterministic checks decide;
+          Judge &amp; Jury intercepts the deploy itself. Deterministic checks decide;
           every block becomes a prior the gate recalls the next time.
         </p>
         <TerminalCard className="mt-8" />

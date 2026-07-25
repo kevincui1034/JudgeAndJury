@@ -1,8 +1,14 @@
-# Proofjury
+# Judge & Jury
 
 **The last command before production.**
 
-Coding agents write code no human reviews — and then they ship it. Proofjury is the correctness gate for AI-written code: it intercepts the deploy command itself, decides with deterministic checks, explains exactly why with evidence, and remembers every diagnosed failure so recurrence is caught instantly.
+> The product is **Judge & Jury**. The CLI binary, config file
+> (`.proofjury.toml`), state directory (`.proofjury/`), `PROOFJURY_*` env vars,
+> and the Python package are all still named `proofjury` — renaming those is a
+> breaking change for every installed user and needs a slug decision, since
+> "Judge & Jury" is not a valid command name.
+
+Coding agents write code no human reviews — and then they ship it. Judge & Jury is the correctness gate for AI-written code: it intercepts the deploy command itself, decides with deterministic checks, explains exactly why with evidence, and remembers every diagnosed failure so recurrence is caught instantly.
 
 ```
 $ proofjury guard deploy -- ./deploy.sh
@@ -35,10 +41,10 @@ prior diagnosis: `↩ Recalled from chk_001`.
 ## Why this exists
 
 - **The gate cannot be talked past.** Deterministic checks decide pass/fail; the LLM only explains. An agent can't argue its way through an unset env var.
-- **Blocks the deploy — then tells your agent exactly how to fix it.** A Proofjury denial is structured feedback the agent consumes to fix the failure and re-run. The gate makes your agent finish the job.
+- **Blocks the deploy — then tells your agent exactly how to fix it.** A Judge & Jury denial is structured feedback the agent consumes to fix the failure and re-run. The gate makes your agent finish the job.
 - **Every deploy ships with a proof record.** Reproducible evidence — which check failed, `file:line`, command output — not a regenerated opinion.
 - **It remembers.** Every diagnosed failure is stored in training-ready form; recurrence is caught instantly and cites the prior record.
-- **Doesn't care which agent wrote it.** Claude Code, Codex, Cursor — same gate, same checks, same memory. Correctness, not security: your guardrails stop the dangerous command; Proofjury stops the broken one.
+- **Doesn't care which agent wrote it.** Claude Code, Codex, Cursor — same gate, same checks, same memory. Correctness, not security: your guardrails stop the dangerous command; Judge & Jury stops the broken one.
 
 ## Layout
 

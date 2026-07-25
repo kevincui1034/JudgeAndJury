@@ -22,7 +22,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Proofjury",
+  title: "Judge & Jury",
   description:
     "Every gate run as a trace — the verdict, the evidence, and what the judge told your coding agent.",
 };

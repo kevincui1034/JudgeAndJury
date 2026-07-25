@@ -30,7 +30,7 @@ import { SENSO_DOCS } from "@/lib/senso-docs";
 import { SPONSOR_LIST } from "@/lib/sponsors";
 
 export const metadata: Metadata = {
-  title: "Proofjury — the judge that learns your codebase",
+  title: "Judge & Jury — the judge that learns your codebase",
   description:
     "A self-improving judge for AI-written code. It reviews what your agent ships, explains every finding with evidence, and retrains on the labels you give it.",
 };
@@ -88,7 +88,7 @@ export default function LandingPage() {
 
           <MountIn delay={0.12}>
             <p className="mx-auto mt-6 max-w-xl text-[15px] leading-relaxed text-body">
-              Proofjury reviews everything your coding agent ships and explains
+              Judge &amp; Jury reviews everything your coding agent ships and explains
               each finding with the evidence behind it. Then you tell it what it
               got wrong — and it retrains on that. The advice you reject stops
               coming back, and the mistakes you keep correcting turn into rules
