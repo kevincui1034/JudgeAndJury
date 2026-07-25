@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ArchiveButton } from "@/components/ArchiveButton";
 import {
   Badge,
   ClassChip,
@@ -11,7 +12,11 @@ import {
   timeAgo,
   VerdictBadge,
 } from "@/components/ui/primitives";
-import { listTraces, traceFacets } from "@/lib/queries/traces";
+import {
+  archivedTraceCount,
+  listTraces,
+  traceFacets,
+} from "@/lib/queries/traces";
 import { requireRepo } from "@/lib/repo";
 
 interface Search {
@@ -19,6 +24,8 @@ interface Search {
   action?: string;
   failureClass?: string;
   agent?: string;
+  /** "1" = show the archived traces instead of the live ones. */
+  archived?: string;
 }
 
 function Pill({
@@ -55,8 +62,9 @@ export default async function TracesPage({
   const { repoId } = await params;
   const sp = await searchParams;
   const { repo } = await requireRepo(repoId);
+  const archived = sp.archived === "1";
 
-  const [rows, facets] = await Promise.all([
+  const [rows, facets, archivedCount] = await Promise.all([
     listTraces(repo.id, {
       verdict:
         sp.verdict === "passed" || sp.verdict === "blocked"
@@ -65,8 +73,10 @@ export default async function TracesPage({
       action: sp.action,
       failureClass: sp.failureClass,
       agent: sp.agent,
+      archived,
     }),
-    traceFacets(repo.id),
+    traceFacets(repo.id, archived),
+    archivedTraceCount(repo.id),
   ]);
 
   const base = `/r/${repoId}/traces`;
@@ -84,9 +94,16 @@ export default async function TracesPage({
         title="Gate"
         accent="traces"
         sub={
-          <>
-            Every intercepted command, with the evidence behind its verdict.
-          </>
+          archived ? (
+            <>
+              Traces you moved out of the main list. Each one is kept in full —
+              the record, its evidence and its verdict are unchanged.
+            </>
+          ) : (
+            <>
+              Every intercepted command, with the evidence behind its verdict.
+            </>
+          )
         }
       />
 
@@ -100,6 +117,10 @@ export default async function TracesPage({
           </Pill>
           <Pill href={q({ verdict: "passed" })} active={sp.verdict === "passed"}>
             Passed
+          </Pill>
+          <span className="mx-2 h-4 w-px bg-line" />
+          <Pill href={q({ archived: archived ? undefined : "1" })} active={archived}>
+            Archived{archivedCount > 0 && ` · ${archivedCount}`}
           </Pill>
           {facets.failureClasses.length > 0 && (
             <span className="mx-2 h-4 w-px bg-line" />
@@ -117,53 +138,72 @@ export default async function TracesPage({
 
         {rows.length === 0 ? (
           <EmptyState
-            title="No traces match."
-            hint="Clear the filters, or run the gate and sync."
+            title={archived ? "Nothing archived here." : "No traces match."}
+            hint={
+              archived
+                ? "Archiving a trace moves it here and leaves the record untouched."
+                : "Clear the filters, or run the gate and sync."
+            }
           />
         ) : (
           <div className="pb-2">
             {rows.map((t) => (
-              <Link
+              <div
                 key={t.pk}
-                href={`${base}/${t.recordId}`}
-                className="flex items-center gap-3 border-t border-line/70 px-5 py-3 transition-colors first:border-t-0 hover:bg-tint"
+                className={cx(
+                  "flex items-center gap-3 border-t border-line/70 pr-4 pl-5 transition-colors first:border-t-0 hover:bg-tint",
+                  t.archivedAt && "opacity-55",
+                )}
               >
-                <Mono className="w-16 shrink-0 text-body">{t.recordId}</Mono>
-                <VerdictBadge passed={t.gatePassed} />
-                <span className="w-16 shrink-0 text-[12px] text-faint">
-                  {t.action}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                  {t.failureClasses.slice(0, 4).map((c) => (
-                    <ClassChip key={c} name={c} />
-                  ))}
-                  {t.recalledFrom && (
-                    <Badge tone="violet" mono>
-                      ↩ {t.recalledFrom}
-                    </Badge>
-                  )}
-                  {Number(t.advisoryCount) > 0 && (
-                    <Badge tone="amber">{t.advisoryCount} advisory</Badge>
-                  )}
-                  {t.resolutionStatus && (
-                    <Badge
-                      tone={
-                        t.resolutionStatus === "false_positive"
-                          ? "red"
-                          : "green"
-                      }
-                    >
-                      {t.resolutionStatus}
-                    </Badge>
-                  )}
-                </div>
-                <span className="shrink-0 text-[11px] text-faint">
-                  {t.agentSource}
-                </span>
-                <span className="w-16 shrink-0 text-right text-[11px] text-faint">
-                  {timeAgo(t.createdAt)}
-                </span>
-              </Link>
+                <Link
+                  href={`${base}/${t.recordId}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-3"
+                >
+                  <Mono className="w-16 shrink-0 text-body">{t.recordId}</Mono>
+                  <VerdictBadge passed={t.gatePassed} />
+                  <span className="w-16 shrink-0 text-[12px] text-faint">
+                    {t.action}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                    {t.archivedAt && <Badge tone="faint">archived</Badge>}
+                    {t.failureClasses.slice(0, 4).map((c) => (
+                      <ClassChip key={c} name={c} />
+                    ))}
+                    {t.recalledFrom && (
+                      <Badge tone="violet" mono>
+                        ↩ {t.recalledFrom}
+                      </Badge>
+                    )}
+                    {Number(t.advisoryCount) > 0 && (
+                      <Badge tone="amber">{t.advisoryCount} advisory</Badge>
+                    )}
+                    {t.resolutionStatus && (
+                      <Badge
+                        tone={
+                          t.resolutionStatus === "false_positive"
+                            ? "red"
+                            : "green"
+                        }
+                      >
+                        {t.resolutionStatus}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[11px] text-faint">
+                    {t.agentSource}
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-[11px] text-faint">
+                    {timeAgo(t.createdAt)}
+                  </span>
+                </Link>
+                <ArchiveButton
+                  repoId={repoId}
+                  recordId={t.recordId}
+                  path={base}
+                  archived={Boolean(t.archivedAt)}
+                  className="shrink-0"
+                />
+              </div>
             ))}
           </div>
         )}

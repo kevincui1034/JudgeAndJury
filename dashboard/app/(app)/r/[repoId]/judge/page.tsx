@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Activity, CircleDollarSign, Cpu, Layers, Plug } from "lucide-react";
 
+import { FinetuneButton } from "@/components/FinetuneButton";
 import {
   AuthorityBadge,
   SponsorMark,
@@ -30,6 +31,7 @@ import {
   recallStats,
 } from "@/lib/queries/judge";
 import { requireRepo } from "@/lib/repo";
+import { resolveSensoDoc, SENSO_DOCS } from "@/lib/senso-docs";
 import { SPONSORS, SPONSOR_LIST, type Sponsor } from "@/lib/sponsors";
 
 export default async function JudgePage({
@@ -60,6 +62,27 @@ export default async function JudgePage({
   const totalCalls = costs.reduce((n, c) => n + c.calls, 0);
   const servedModels = new Set(surfaces.map((s) => s.model));
   const maxCost = costs[0]?.cost || 1;
+
+  /**
+   * Fold the cited `[source: …]` tags onto the published documents.
+   *
+   * Citations are free text produced upstream, so a tag that resolves to
+   * nothing known is NOT dropped — it lands in `unresolvedCitations` and
+   * renders with its raw source. Hiding it would hide a real citation.
+   */
+  const citedBySlug = new Map<string, string[]>();
+  const unresolvedCitations: { source: string; statements: string[] }[] = [];
+  for (const row of conventions) {
+    const doc = resolveSensoDoc(row.source);
+    if (!doc) {
+      unresolvedCitations.push(row);
+      continue;
+    }
+    const seen = citedBySlug.get(doc.slug) ?? [];
+    for (const s of row.statements) if (!seen.includes(s)) seen.push(s);
+    citedBySlug.set(doc.slug, seen);
+  }
+  const citedDocs = SENSO_DOCS.filter((d) => citedBySlug.has(d.slug)).length;
 
   /**
    * The value the CLI reported for a sponsor's capability. The registry's
@@ -292,40 +315,119 @@ export default async function JudgePage({
         </div>
       </SplitPanel>
 
-      {/* ── Senso: cited conventions ── */}
+      {/* ── Senso: the published conventions, and which ones the judge cited ──
+          The document list is the authored policy itself; the statements under
+          each one are parsed back out of the stored prompt, so a row is only
+          marked cited when a real [source: …] tag resolved to it. */}
       <GlassPanel>
         <PanelHeader
           title="Team"
-          accent="conventions cited"
-          hint="Authored policy the judge referenced, parsed back out of the stored prompt with its source citation."
-          right={<SponsorTag sponsor={SPONSORS.senso} />}
+          accent="conventions"
+          hint="Policy this team published, and the statements the judge actually pulled from each document."
+          right={
+            <>
+              <Badge tone={citedDocs ? "amber" : "faint"}>
+                {citedDocs}/{SENSO_DOCS.length} cited
+              </Badge>
+              <SponsorTag sponsor={SPONSORS.senso} />
+            </>
+          }
         />
-        {conventions.length === 0 ? (
-          <EmptyState
-            title="No conventions cited."
-            hint="Enable [conventions] and point it at a knowledge base; cited statements then carry a [source: doc] tag into findings."
-          />
-        ) : (
-          <div className="pb-2">
-            {conventions.map((doc) => (
+
+        <div>
+          {SENSO_DOCS.map((doc) => {
+            const statements = citedBySlug.get(doc.slug);
+            return (
               <div
-                key={doc.source}
-                className="border-t border-line/70 px-5 py-3 first:border-t-0"
+                key={doc.slug}
+                className="border-t border-line/70 px-5 py-3.5"
               >
-                <Badge tone="amber" mono>
-                  {doc.source}
-                </Badge>
-                <ul className="mt-2 space-y-1">
-                  {doc.statements.map((s) => (
-                    <li key={s} className="text-[12.5px] text-body">
-                      {s}
-                    </li>
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                  <div className="min-w-0">
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[13.5px] text-ink underline-offset-2 transition-colors hover:text-amber-ink hover:underline"
+                    >
+                      {doc.title} ↗
+                    </a>
+                    <p className="mt-0.5 max-w-2xl text-[11.5px] leading-relaxed text-faint">
+                      {doc.summary}
+                    </p>
+                  </div>
+                  <Badge tone={statements ? "amber" : "faint"}>
+                    {statements
+                      ? `cited · ${statements.length} statement${statements.length === 1 ? "" : "s"}`
+                      : "not cited yet"}
+                  </Badge>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Mono className="text-faint">[source: {doc.slug}]</Mono>
+                  {doc.topics.map((t) => (
+                    <Badge key={t} tone="faint">
+                      {t}
+                    </Badge>
                   ))}
-                </ul>
+                </div>
+
+                {statements && (
+                  <ul className="mt-2.5 space-y-1 border-l border-amber/30 pl-3">
+                    {statements.map((s) => (
+                      <li key={s} className="text-[12.5px] text-body">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* A citation whose source is not one of the published documents is
+            still a citation — render it verbatim rather than losing it. */}
+        {unresolvedCitations.length > 0 && (
+          <div className="border-t border-line/70 px-5 py-3.5">
+            <p className="text-[10px] tracking-wide text-faint uppercase">
+              cited, not a published document
+            </p>
+            <div className="mt-2 space-y-3">
+              {unresolvedCitations.map((row) => (
+                <div key={row.source}>
+                  <Badge tone="amber" mono>
+                    {row.source}
+                  </Badge>
+                  <ul className="mt-1.5 space-y-1">
+                    {row.statements.map((s) => (
+                      <li key={s} className="text-[12.5px] text-body">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         )}
+
+        {conventions.length === 0 && (
+          <EmptyState
+            title="Nothing cited on this repo yet."
+            hint="Enable [conventions] and point it at a knowledge base; cited statements then carry a [source: doc] tag into findings, and the documents above light up here."
+          />
+        )}
+
+        <div className="flex items-start gap-2.5 border-t border-line/70 px-5 py-3">
+          <SponsorMark sponsor={SPONSORS.senso} />
+          <p className="text-[11.5px] leading-relaxed text-faint">
+            <span className="text-body">{SPONSORS.senso.authority}.</span> A
+            cited convention explains a verdict the deterministic checks already
+            reached — it can never produce one, and no document above can change
+            whether this repo&apos;s gate passed.
+          </p>
+        </div>
       </GlassPanel>
 
       {/* ── Replay: browser QA ── */}
@@ -415,7 +517,16 @@ export default async function JudgePage({
             <code className="mt-1.5 block font-mono text-[12px] text-amber-ink">
               proofjury memory finetune --dry-run
             </code>
-            <p className="mt-2 text-[11.5px] leading-relaxed text-faint">
+
+            {/* Queueing writes a row the way a config change does; the
+                machine that holds the prompts runs the job. */}
+            <FinetuneButton
+              repoId={repoId}
+              path={`/r/${repoId}/judge`}
+              trainingRows={tune.trainingRows}
+            />
+
+            <p className="mt-3 border-t border-line/70 pt-2.5 text-[11.5px] leading-relaxed text-faint">
               When the job completes, set{" "}
               <Mono>[advisory].model</Mono> to the returned job id on the Gate
               config page — a tuned model is just a model id, so adopting it is

@@ -157,6 +157,13 @@ export const records = pgTable(
     cliVersion: text("cli_version"),
     schemaVersion: text("schema_version"),
     data: jsonb("data").notNull(), // full MemoryRecord verbatim
+    /**
+     * Soft archive. Hiding a trace must never destroy it: the record is the
+     * proof that a deploy was gated, and its label is training signal. Set
+     * this to drop a trace out of lists and stats; clear it to restore. The
+     * row, its advisories and its proof blobs are all left intact.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ingestedAt: timestamp("ingested_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

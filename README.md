@@ -47,7 +47,7 @@ prior diagnosis: `↩ Recalled from chk_001`.
 | [`cli/`](cli/) | The `proofjury` CLI (Python 3.11+, Apache-2.0): `guard`, `run`, `resolve`, `confirm`, `memory`, `init`, `status`, `checkpoint`, `prefs` |
 | [`demo-app/`](demo-app/) | An intentionally-broken agent-built app — the acceptance-test bed |
 | [`scripts/demo.sh`](scripts/demo.sh) | End-to-end demo: block → fix → allow → recurrence caught from memory |
-| [`landing/`](landing/) | proofjury.com landing page (Next.js, static export) |
+| [`dashboard/app/(marketing)/`](dashboard/app/(marketing)/) | proofjury.com landing page — lives in the dashboard app and is prerendered (it makes no `auth()` call, so `/` stays static) |
 | [`dashboard/`](dashboard/) | app.proofjury.com hosted dashboard (Next.js + Supabase Postgres/Drizzle + Auth.js + Cloudflare R2): every gate run as a trace — verdict, evidence, blast radius, judge advice feed |
 
 ## Quick start

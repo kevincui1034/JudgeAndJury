@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
+  ArrowUpRight,
   Check,
+  FileText,
   Gavel,
   Lock,
   MessageSquareReply,
@@ -24,6 +26,7 @@ import {
   SponsorMark,
 } from "@/components/sponsors/SponsorMark";
 import { Badge, ClassChip, Mono } from "@/components/ui/primitives";
+import { SENSO_DOCS } from "@/lib/senso-docs";
 import { SPONSOR_LIST } from "@/lib/sponsors";
 
 export const metadata: Metadata = {
@@ -329,10 +332,16 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
+            {/* The inline <Mono> must live inside a single span: as a direct
+                child of the flex row it becomes a flex item and gets pushed
+                to the far edge, away from the sentence it belongs to. */}
             <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-faint">
               <Lock className="mt-0.5 size-3.5 shrink-0" />
-              Bring your own key, scrubbed at the edge, and nothing uploads until
-              you run <Mono className="text-body">proofjury connect</Mono>.
+              <span>
+                Bring your own key, scrubbed at the edge, and nothing uploads
+                until you run{" "}
+                <Mono className="text-body">proofjury connect</Mono>.
+              </span>
             </p>
           </Reveal>
 
@@ -368,6 +377,43 @@ export default function LandingPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* The authored policy the judge is allowed to cite. Real
+                published documents, not fixtures — a citation carries a
+                [source: doc] tag into the finding so advice is traceable to
+                something a human wrote. */}
+            <div className="glass glass-edge mt-4 overflow-hidden rounded-2xl">
+              <div className="border-b border-line px-5 py-4">
+                <p className="text-[13.5px] font-medium text-ink">
+                  Conventions it can cite
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-faint">
+                  Policy your team authored. When the judge leans on one, the
+                  finding carries the source — so you can argue with the
+                  document rather than with the model.
+                </p>
+              </div>
+              {SENSO_DOCS.map((d) => (
+                <a
+                  key={d.slug}
+                  href={d.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-start gap-3 border-t border-line px-5 py-3.5 transition-colors first:border-t-0 hover:bg-tint"
+                >
+                  <FileText className="mt-0.5 size-4 shrink-0 text-amber-ink" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+                      <span className="truncate">{d.title}</span>
+                      <ArrowUpRight className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-amber-ink" />
+                    </span>
+                    <span className="mt-1 block text-[12px] leading-relaxed text-faint">
+                      {d.summary}
+                    </span>
+                  </span>
+                </a>
+              ))}
             </div>
           </Reveal>
         </div>

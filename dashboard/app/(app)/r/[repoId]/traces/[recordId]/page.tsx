@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ArchiveButton } from "@/components/ArchiveButton";
 import {
   AuthorityBadge,
   SponsorMark,
@@ -80,6 +81,7 @@ export default async function TracePage({
 
   const recordings = checks.flatMap((c) => replayLinks(c.evidence));
   const base = `/r/${repoId}`;
+  const isArchived = Boolean(record.archivedAt);
   const replay = SPONSORS.replay;
   const actian = SPONSORS.actian;
 
@@ -88,10 +90,10 @@ export default async function TracePage({
       <div className="flex flex-wrap items-end justify-between gap-3 px-1 pt-1">
         <div>
           <Link
-            href={`${base}/traces`}
+            href={isArchived ? `${base}/traces?archived=1` : `${base}/traces`}
             className="text-[11px] text-faint transition-colors hover:text-body"
           >
-            ← all traces
+            {isArchived ? "← archived traces" : "← all traces"}
           </Link>
           <h1 className="mt-1 flex items-center gap-3 text-[34px] leading-none font-medium tracking-tight text-ink">
             <Mono className="!text-[30px]">{record.recordId}</Mono>
@@ -133,8 +135,27 @@ export default async function TracePage({
               <SponsorTag sponsor={actian} />
             </span>
           )}
+          {isArchived && <Badge tone="faint">archived</Badge>}
+          <ArchiveButton
+            repoId={repoId}
+            recordId={record.recordId}
+            path={`${base}/traces/${record.recordId}`}
+            archived={isArchived}
+          />
         </div>
       </div>
+
+      {isArchived && (
+        <GlassPanel className="px-5 py-3">
+          <p className="text-[12px] leading-relaxed text-body">
+            <span className="text-ink">This trace is archived.</span> It is
+            hidden from the main Gate list and shows up under the Archived
+            filter. Nothing was removed — the record, its advisories, its
+            evidence and its {record.gatePassed ? "passed" : "blocked"} verdict
+            are exactly as they were. Restore it any time.
+          </p>
+        </GlassPanel>
+      )}
 
       {/* ── the canvas ── */}
       <GlassPanel className="overflow-hidden">

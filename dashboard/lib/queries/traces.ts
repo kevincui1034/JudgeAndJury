@@ -10,6 +10,8 @@ import {
   desc,
   eq,
   ilike,
+  isNotNull,
+  isNull,
   lt,
   max,
   or,
@@ -46,12 +48,37 @@ export async function getRepo(userId: string, repoId: string) {
   return repo ?? null;
 }
 
+/**
+ * The soft-archive predicate. `archived_at` NULL means visible; a timestamp
+ * means the trace has been archived out of the list. Every trace listing and
+ * every facet goes through this one helper so a list and its filter pills can
+ * never disagree about which rows they are describing.
+ */
+function archivedCondition(archived?: boolean) {
+  return archived ? isNotNull(records.archivedAt) : isNull(records.archivedAt);
+}
+
+/** How many traces this repo currently has archived. */
+export async function archivedTraceCount(repoPk: string) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(records)
+    .where(and(eq(records.repoPk, repoPk), isNotNull(records.archivedAt)));
+  return Number(row?.n ?? 0);
+}
+
 export interface TraceFilters {
   verdict?: "passed" | "blocked";
   action?: string;
   failureClass?: string;
   agent?: string;
   q?: string;
+  /**
+   * Soft-archive view. Default (falsey) lists only live traces; `true` lists
+   * ONLY archived ones. Archiving hides a trace from the list — it never
+   * removes the record, its advisories or its proof blobs.
+   */
+  archived?: boolean;
   /** keyset cursor: "<createdAt ISO>|<pk>" from the previous page's tail */
   before?: string;
 }
@@ -59,7 +86,7 @@ export interface TraceFilters {
 export const TRACES_PAGE_SIZE = 50;
 
 export async function listTraces(repoPk: string, filters: TraceFilters) {
-  const conditions = [eq(records.repoPk, repoPk)];
+  const conditions = [eq(records.repoPk, repoPk), archivedCondition(filters.archived)];
   if (filters.verdict) {
     conditions.push(eq(records.gatePassed, filters.verdict === "passed"));
   }
@@ -101,6 +128,7 @@ export async function listTraces(repoPk: string, filters: TraceFilters) {
       failureClasses: records.failureClasses,
       recalledFrom: records.recalledFrom,
       resolutionStatus: records.resolutionStatus,
+      archivedAt: records.archivedAt,
       advisoryCount: sql<number>`(${advisoryCount})`,
     })
     .from(records)
@@ -109,20 +137,22 @@ export async function listTraces(repoPk: string, filters: TraceFilters) {
     .limit(TRACES_PAGE_SIZE);
 }
 
-/** Distinct filter values actually present in this repo (for the filter bar). */
-export async function traceFacets(repoPk: string) {
+/**
+ * Distinct filter values actually present in this repo (for the filter bar).
+ * Takes the same archive view as `listTraces` so the pills can never offer a
+ * facet that matches nothing in the list below them.
+ */
+export async function traceFacets(repoPk: string, archived = false) {
+  const scope = and(eq(records.repoPk, repoPk), archivedCondition(archived));
+  const classScope = archived
+    ? sql`archived_at is not null`
+    : sql`archived_at is null`;
   const [actions, agents, classes] = await Promise.all([
-    db
-      .selectDistinct({ value: records.action })
-      .from(records)
-      .where(eq(records.repoPk, repoPk)),
-    db
-      .selectDistinct({ value: records.agentSource })
-      .from(records)
-      .where(eq(records.repoPk, repoPk)),
+    db.selectDistinct({ value: records.action }).from(records).where(scope),
+    db.selectDistinct({ value: records.agentSource }).from(records).where(scope),
     db.execute(sql`
       SELECT DISTINCT unnest(failure_classes) AS value
-      FROM records WHERE repo_pk = ${repoPk} ORDER BY value
+      FROM records WHERE repo_pk = ${repoPk} AND ${classScope} ORDER BY value
     `),
   ]);
   return {
